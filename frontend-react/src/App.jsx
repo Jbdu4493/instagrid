@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Camera, Sparkles, Send, LayoutGrid, Instagram, AlertCircle, Loader2, RefreshCw, Save, Trash2, Edit3, Eye } from 'lucide-react';
+import { Upload, Camera, Sparkles, Send, LayoutGrid, Instagram, AlertCircle, Loader2, RefreshCw, Save, Trash2, Edit3, Eye, FileText } from 'lucide-react';
 import UploadSection from './components/UploadSection';
 import GridEditor from './components/GridEditor';
 import StrategyPanel from './components/StrategyPanel';
+import DraftsPanel from './components/DraftsPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -22,6 +23,8 @@ const ASPECT_CSS = {
 };
 
 function App() {
+  // Tab navigation
+  const [activeTab, setActiveTab] = useState('create');
   // State for Upload Phase
   const [files, setFiles] = useState([null, null, null]);
   const [previews, setPreviews] = useState([null, null, null]);
@@ -402,190 +405,71 @@ function App() {
             </h1>
             <p className="text-gray-400">Create the perfect 3-post grid sequence.</p>
           </div>
-        </header>
 
-        {/* Token Management (always visible) */}
-        <section className="bg-card border border-border rounded-xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              🔑 Token Instagram
-            </h2>
-            {accessToken && (
-              <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
-                Token configuré
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-400">Instagram User ID</label>
-              <input type="text" value={igUserId} onChange={(e) => setIgUserId(e.target.value)}
-                className="w-full bg-dark border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                placeholder="1784140xxxxxxx" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-400">Access Token</label>
-              <div className="flex gap-2">
-                <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
-                  className="flex-1 bg-dark border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                  placeholder="EAAB..." />
-                {fbAppConfigured && (
-                  <button
-                    onClick={handleExchangeToken}
-                    disabled={isExchanging || !accessToken}
-                    title="Échanger contre un token permanent"
-                    className={`px-4 rounded-lg font-semibold text-sm flex items-center gap-1.5 transition-all whitespace-nowrap
-                      ${isExchanging ? 'bg-gray-700 text-gray-400' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
-                  >
-                    {isExchanging ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    Étendre
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {exchangeResult && (
-            <div className={`rounded-lg p-3 text-sm ${exchangeResult.status === 'success'
-              ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-              : 'bg-red-500/10 border border-red-500/20 text-red-400'
-              }`}>
-              {exchangeResult.message}
-              {exchangeResult.token_type === 'permanent_page' && (
-                <span className="ml-2 font-semibold">♾️ Permanent</span>
-              )}
-              {exchangeResult.expires_in_days && (
-                <span className="ml-2 text-amber-300">⏳ {exchangeResult.expires_in_days}j</span>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* 1. Upload Section */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">1</span>
-            Upload & Context
-          </h2>
-          <UploadSection
-            files={files}
-            previews={previews}
-            onUpload={handleFileUpload}
-            userContext={userContext}
-            setUserContext={setUserContext}
-            individualContexts={individualContexts}
-            onContextChange={handleContextChange}
-            cropRatios={cropRatios}
-            onCropChange={(idx, value) => {
-              const newRatios = [...cropRatios];
-              newRatios[idx] = value;
-              setCropRatios(newRatios);
-            }}
-            cropPositions={cropPositions}
-            onPositionChange={(idx, pos) => {
-              const newPos = [...cropPositions];
-              newPos[idx] = pos;
-              setCropPositions(newPos);
-            }}
-          />
-
-          <div className="flex justify-end pt-4">
+          {/* Tab Navigation */}
+          <div className="flex gap-2">
             <button
-              onClick={handleGenerateStrategy}
-              disabled={files.some(f => !f) || isAnalyzing}
-              className={`
-                flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all
-                ${files.some(f => !f)
-                  ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 shadow-lg hover:shadow-pink-500/25'}
-              `}
+              onClick={() => setActiveTab('create')}
+              className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'create'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
+                : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
             >
-              {isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
-              {isAnalyzing ? 'Analyse en cours...' : '✨ Analyser la grille'}
+              <Sparkles size={16} />
+              Création
+            </button>
+            <button
+              onClick={() => setActiveTab('drafts')}
+              className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'drafts'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
+                : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+            >
+              <FileText size={16} />
+              Brouillons
             </button>
           </div>
-        </section>
+        </header>
 
-        {/* 2. Editor Section */}
-        {posts.length > 0 && (
-          <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold flex items-center gap-2">
-                <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">2</span>
-                Grid Editor (Visual Flow & Captions)
-              </h2>
-              <div className="text-sm text-gray-400 bg-card px-4 py-2 rounded-lg border border-border">
-                Review the AI-suggested order and captions. You can reorder if needed.
+        {activeTab === 'drafts' && (
+          <DraftsPanel accessToken={accessToken} igUserId={igUserId} />
+        )}
+
+        {activeTab === 'create' && (
+          <>
+            {/* Token Management */}
+            <section className="bg-card border border-border rounded-xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  🔑 Token Instagram
+                </h2>
+                {accessToken && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+                    Token configuré
+                  </span>
+                )}
               </div>
-            </div>
 
-            <GridEditor
-              posts={posts}
-              setPosts={setPosts}
-              onRegenerate={handleRegenerateCaption}
-              onHistoryNav={handleCaptionHistory}
-            />
-          </section>
-        )}
-
-        {/* 3. Strategy Section */}
-        {analysisResult && (
-          <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">3</span>
-              Strategy & Coherence
-            </h2>
-            <StrategyPanel
-              result={analysisResult}
-              onAppendHashtags={(ladders) => {
-                setPosts(prevPosts => prevPosts.map((p, idx) => {
-                  const ladder = ladders[idx];
-                  if (!ladder) return p;
-
-                  const tagsString = [...(ladder.broad || []), ...(ladder.niche || []), ...(ladder.specific || [])]
-                    .map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
-
-                  return {
-                    ...p,
-                    caption: p.caption + "\n\n" + tagsString
-                  };
-                }));
-              }}
-            />
-          </section>
-        )}
-
-        {/* 4. Publication Section */}
-        {posts.length > 0 && (
-          <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200 pb-20">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">4</span>
-              Publication
-            </h2>
-
-            <div className="bg-card border border-border rounded-xl p-8 space-y-6">
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">Instagram User ID</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-400">Instagram User ID</label>
                   <input type="text" value={igUserId} onChange={(e) => setIgUserId(e.target.value)}
-                    className="w-full bg-dark border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                    className="w-full bg-dark border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                     placeholder="1784140xxxxxxx" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">Access Token</label>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-400">Access Token</label>
                   <div className="flex gap-2">
                     <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
-                      className="flex-1 bg-dark border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                      className="flex-1 bg-dark border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                       placeholder="EAAB..." />
                     {fbAppConfigured && (
                       <button
                         onClick={handleExchangeToken}
                         disabled={isExchanging || !accessToken}
-                        title="Étendre le token (permanent)"
+                        title="Échanger contre un token permanent"
                         className={`px-4 rounded-lg font-semibold text-sm flex items-center gap-1.5 transition-all whitespace-nowrap
-                          ${isExchanging ? 'bg-gray-700 text-gray-400' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
+                      ${isExchanging ? 'bg-gray-700 text-gray-400' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
                       >
                         {isExchanging ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                         Étendre
@@ -596,173 +480,208 @@ function App() {
               </div>
 
               {exchangeResult && (
-                <div className={`rounded-lg p-4 text-sm font-mono ${exchangeResult.status === 'success'
+                <div className={`rounded-lg p-3 text-sm ${exchangeResult.status === 'success'
                   ? 'bg-green-500/10 border border-green-500/20 text-green-400'
                   : 'bg-red-500/10 border border-red-500/20 text-red-400'
                   }`}>
                   {exchangeResult.message}
                   {exchangeResult.token_type === 'permanent_page' && (
-                    <div className="mt-1 text-green-300 font-sans font-semibold">♾️ Ce token ne expire jamais.</div>
+                    <span className="ml-2 font-semibold">♾️ Permanent</span>
                   )}
                   {exchangeResult.expires_in_days && (
-                    <div className="mt-1 text-amber-300 font-sans">⏳ Expire dans {exchangeResult.expires_in_days} jours.</div>
+                    <span className="ml-2 text-amber-300">⏳ {exchangeResult.expires_in_days}j</span>
                   )}
                 </div>
               )}
+            </section>
 
-              <div className="pt-4 border-t border-gray-800 flex gap-3">
+            {/* 1. Upload Section */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">1</span>
+                Upload & Context
+              </h2>
+              <UploadSection
+                files={files}
+                previews={previews}
+                onUpload={handleFileUpload}
+                userContext={userContext}
+                setUserContext={setUserContext}
+                individualContexts={individualContexts}
+                onContextChange={handleContextChange}
+                cropRatios={cropRatios}
+                onCropChange={(idx, value) => {
+                  const newRatios = [...cropRatios];
+                  newRatios[idx] = value;
+                  setCropRatios(newRatios);
+                }}
+                cropPositions={cropPositions}
+                onPositionChange={(idx, pos) => {
+                  const newPos = [...cropPositions];
+                  newPos[idx] = pos;
+                  setCropPositions(newPos);
+                }}
+              />
+
+              <div className="flex justify-end pt-4">
                 <button
-                  onClick={handleSaveDraft}
-                  disabled={isSaving}
+                  onClick={handleGenerateStrategy}
+                  disabled={files.some(f => !f) || isAnalyzing}
                   className={`
-                    flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
-                    ${isSaving
-                      ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 hover:shadow-lg hover:shadow-emerald-500/25'}
-                  `}
+                flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all
+                ${files.some(f => !f)
+                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 shadow-lg hover:shadow-pink-500/25'}
+              `}
                 >
-                  {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
-                  {isSaving ? 'Saving...' : '💾 Save Draft'}
-                </button>
-                <button
-                  onClick={handlePostToInstagram}
-                  disabled={isPosting}
-                  className={`
-                    flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
-                    ${isPosting
-                      ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:shadow-lg hover:shadow-blue-500/25'}
-                  `}
-                >
-                  {isPosting ? <Loader2 className="animate-spin" /> : <Send />}
-                  {isPosting ? 'Posting...' : '🚀 Post Now'}
+                  {isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                  {isAnalyzing ? 'Analyse en cours...' : '✨ Analyser la grille'}
                 </button>
               </div>
+            </section>
 
-              {postLogs.length > 0 && (
-                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-green-400 text-sm font-mono">
-                  {postLogs.map((log, i) => <div key={i}>✅ {log}</div>)}
+            {/* 2. Editor Section */}
+            {posts.length > 0 && (
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">2</span>
+                    Grid Editor (Visual Flow & Captions)
+                  </h2>
+                  <div className="text-sm text-gray-400 bg-card px-4 py-2 rounded-lg border border-border">
+                    Review the AI-suggested order and captions. You can reorder if needed.
+                  </div>
                 </div>
-              )}
-            </div>
-          </section>
-        )}
 
-        {/* 5. Saved Drafts Section */}
-        <section className="space-y-6 pb-20">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">5</span>
-              📋 Brouillons sauvegardés
-            </h2>
-            <button onClick={fetchDrafts} className="text-sm text-gray-400 hover:text-white transition-colors">
-              <RefreshCw size={16} className="inline mr-1" /> Rafraîchir
-            </button>
-          </div>
+                <GridEditor
+                  posts={posts}
+                  setPosts={setPosts}
+                  onRegenerate={handleRegenerateCaption}
+                  onHistoryNav={handleCaptionHistory}
+                />
+              </section>
+            )}
 
-          {drafts.length === 0 ? (
-            <div className="bg-card border border-border rounded-xl p-8 text-center text-gray-500">
-              Aucun brouillon sauvegardé. Créez une grille et cliquez "💾 Save Draft".
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {drafts.map(draft => (
-                <div key={draft.id} className={`bg-card border rounded-xl p-6 space-y-4 ${draft.status === 'posted' ? 'border-green-500/30' : 'border-border'
-                  }`}>
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-mono text-gray-400">#{draft.id}</span>
-                      {draft.status === 'posted' ? (
-                        <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
-                          ✅ Publié le {new Date(draft.posted_at).toLocaleDateString('fr-FR')}
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                          📝 Brouillon
-                        </span>
+            {/* 3. Strategy Section */}
+            {analysisResult && (
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">3</span>
+                  Strategy & Coherence
+                </h2>
+                <StrategyPanel
+                  result={analysisResult}
+                  onAppendHashtags={(ladders) => {
+                    setPosts(prevPosts => prevPosts.map((p, idx) => {
+                      const ladder = ladders[idx];
+                      if (!ladder) return p;
+
+                      const tagsString = [...(ladder.broad || []), ...(ladder.niche || []), ...(ladder.specific || [])]
+                        .map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
+
+                      return {
+                        ...p,
+                        caption: p.caption + "\n\n" + tagsString
+                      };
+                    }));
+                  }}
+                />
+              </section>
+            )}
+
+            {/* 4. Publication Section */}
+            {posts.length > 0 && (
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200 pb-20">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">4</span>
+                  Publication
+                </h2>
+
+                <div className="bg-card border border-border rounded-xl p-8 space-y-6">
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-300">Instagram User ID</label>
+                      <input type="text" value={igUserId} onChange={(e) => setIgUserId(e.target.value)}
+                        className="w-full bg-dark border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                        placeholder="1784140xxxxxxx" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-300">Access Token</label>
+                      <div className="flex gap-2">
+                        <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
+                          className="flex-1 bg-dark border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="EAAB..." />
+                        {fbAppConfigured && (
+                          <button
+                            onClick={handleExchangeToken}
+                            disabled={isExchanging || !accessToken}
+                            title="Étendre le token (permanent)"
+                            className={`px-4 rounded-lg font-semibold text-sm flex items-center gap-1.5 transition-all whitespace-nowrap
+                          ${isExchanging ? 'bg-gray-700 text-gray-400' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
+                          >
+                            {isExchanging ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                            Étendre
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {exchangeResult && (
+                    <div className={`rounded-lg p-4 text-sm font-mono ${exchangeResult.status === 'success'
+                      ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                      : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                      }`}>
+                      {exchangeResult.message}
+                      {exchangeResult.token_type === 'permanent_page' && (
+                        <div className="mt-1 text-green-300 font-sans font-semibold">♾️ Ce token ne expire jamais.</div>
+                      )}
+                      {exchangeResult.expires_in_days && (
+                        <div className="mt-1 text-amber-300 font-sans">⏳ Expire dans {exchangeResult.expires_in_days} jours.</div>
                       )}
                     </div>
-                    <span className="text-xs text-gray-500">
-                      Créé le {new Date(draft.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
+                  )}
 
-                  {/* 3 Thumbnails + Captions + Crop */}
-                  <div className="grid grid-cols-3 gap-4">
-                    {draft.posts.map((post, idx) => (
-                      <div key={idx} className="space-y-2">
-                        <div className="overflow-hidden rounded-lg bg-gray-900">
-                          <img
-                            src={post.image_url}
-                            alt={`Draft ${draft.id} - ${idx}`}
-                            className="w-full object-cover"
-                            style={{ aspectRatio: ASPECT_CSS[post.crop_ratio || 'original'] }}
-                          />
-                        </div>
-                        {/* Crop ratio per image */}
-                        <div className="flex gap-1">
-                          {CROP_OPTIONS.map(opt => (
-                            <button
-                              key={opt.value}
-                              onClick={() => {
-                                const newRatios = draft.posts.map(p => p.crop_ratio || 'original');
-                                newRatios[idx] = opt.value;
-                                draft.posts[idx].crop_ratio = opt.value;
-                                setDrafts([...drafts]);
-                                handleUpdateDraftCaption(draft.id, null, newRatios);
-                              }}
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${(post.crop_ratio || 'original') === opt.value
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-gray-800 text-gray-500 hover:text-white'
-                                }`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                        <textarea
-                          value={post.caption}
-                          onChange={(e) => {
-                            draft.posts[idx].caption = e.target.value;
-                            setDrafts([...drafts]);
-                          }}
-                          onBlur={() => {
-                            handleUpdateDraftCaption(draft.id, draft.posts.map(p => p.caption));
-                          }}
-                          className="w-full bg-dark border border-gray-700 rounded-lg p-2 text-white text-xs resize-none h-20 focus:ring-2 focus:ring-purple-500 outline-none"
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2 border-t border-gray-800">
+                  <div className="pt-4 border-t border-gray-800 flex gap-3">
                     <button
-                      onClick={() => handlePostDraft(draft.id)}
-                      disabled={draftPostingId === draft.id}
-                      className={`flex-1 py-2 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${draftPostingId === draft.id
-                        ? 'bg-gray-700 text-gray-400'
-                        : draft.status === 'posted'
-                          ? 'bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-500/20'
-                          : 'bg-blue-600 hover:bg-blue-500 text-white'
-                        }`}
+                      onClick={handleSaveDraft}
+                      disabled={isSaving}
+                      className={`
+                    flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
+                    ${isSaving
+                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 hover:shadow-lg hover:shadow-emerald-500/25'}
+                  `}
                     >
-                      {draftPostingId === draft.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                      {draft.status === 'posted' ? 'Re-publier' : 'Publier'}
+                      {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+                      {isSaving ? 'Saving...' : '💾 Save Draft'}
                     </button>
                     <button
-                      onClick={() => handleDeleteDraft(draft.id)}
-                      className="px-4 py-2 rounded-lg text-sm text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-all"
+                      onClick={handlePostToInstagram}
+                      disabled={isPosting}
+                      className={`
+                    flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
+                    ${isPosting
+                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:shadow-lg hover:shadow-blue-500/25'}
+                  `}
                     >
-                      <Trash2 size={14} />
+                      {isPosting ? <Loader2 className="animate-spin" /> : <Send />}
+                      {isPosting ? 'Posting...' : '🚀 Post Now'}
                     </button>
                   </div>
+
+                  {postLogs.length > 0 && (
+                    <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-green-400 text-sm font-mono">
+                      {postLogs.map((log, i) => <div key={i}>✅ {log}</div>)}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+              </section>
+            )}
+          </>
+        )}
 
       </div>
     </div>
