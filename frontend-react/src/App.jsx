@@ -429,6 +429,26 @@ function App() {
             onContextChange={handleContextChange}
           />
 
+          {/* Crop Ratio Selector */}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-2">
+            <label className="text-sm font-medium text-gray-300">📐 Cadrage</label>
+            <div className="flex gap-2">
+              {CROP_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setCropRatio(opt.value)}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${cropRatio === opt.value
+                    ? 'bg-purple-600 text-white ring-2 ring-purple-400'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                    }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500">Images sauvegardées en qualité originale. Le recadrage est appliqué uniquement lors de la publication.</p>
+          </div>
+
           <div className="flex justify-end pt-4">
             <button
               onClick={handleGenerateStrategy}
@@ -504,26 +524,6 @@ function App() {
             </h2>
 
             <div className="bg-card border border-border rounded-xl p-8 space-y-6">
-
-              {/* Crop Ratio Selector */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300">📐 Cadrage (appliqué uniquement au moment du post)</label>
-                <div className="flex gap-2">
-                  {CROP_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setCropRatio(opt.value)}
-                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${cropRatio === opt.value
-                        ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-                        }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500">Les images sont sauvegardées en qualité originale. Le recadrage est appliqué uniquement lors de la publication.</p>
-              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
