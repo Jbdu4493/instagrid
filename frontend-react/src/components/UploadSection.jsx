@@ -2,7 +2,14 @@ import React from 'react';
 import { Upload, X, CheckCircle } from 'lucide-react';
 import clsx from 'clsx';
 
-function UploadSection({ files, previews, onUpload, userContext, setUserContext, individualContexts, onContextChange }) {
+const CROP_OPTIONS = [
+    { value: 'original', label: 'Original' },
+    { value: '1:1', label: '1:1' },
+    { value: '4:5', label: '4:5' },
+    { value: '16:9', label: '16:9' },
+];
+
+function UploadSection({ files, previews, onUpload, userContext, setUserContext, individualContexts, onContextChange, cropRatios, onCropChange }) {
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -15,6 +22,8 @@ function UploadSection({ files, previews, onUpload, userContext, setUserContext,
                         onUpload={onUpload}
                         context={individualContexts[index]}
                         onContextChange={onContextChange}
+                        cropRatio={cropRatios?.[index] || 'original'}
+                        onCropChange={onCropChange}
                     />
                 ))}
             </div>
@@ -36,7 +45,7 @@ function UploadSection({ files, previews, onUpload, userContext, setUserContext,
     );
 }
 
-function UploadSlot({ index, file, preview, onUpload, context, onContextChange }) {
+function UploadSlot({ index, file, preview, onUpload, context, onContextChange, cropRatio, onCropChange }) {
     const handleDrop = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -115,6 +124,24 @@ function UploadSlot({ index, file, preview, onUpload, context, onContextChange }
                     </>
                 )}
             </div>
+
+            {/* Per-image crop ratio selector */}
+            {preview && (
+                <div className="flex gap-1">
+                    {CROP_OPTIONS.map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => onCropChange(index, opt.value)}
+                            className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${cropRatio === opt.value
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-gray-800 text-gray-500 hover:text-white'
+                                }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* Individual Context Input */}
             <textarea

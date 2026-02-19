@@ -39,7 +39,7 @@ function App() {
   const [drafts, setDrafts] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [draftPostingId, setDraftPostingId] = useState(null);
-  const [cropRatio, setCropRatio] = useState('original');
+  const [cropRatios, setCropRatios] = useState(['original', 'original', 'original']);
 
   // Instagram Credentials (Graph API)
   const [accessToken, setAccessToken] = useState('');
@@ -277,7 +277,7 @@ function App() {
           image_base64: p.preview.split(',')[1],
           caption: p.caption
         })),
-        crop_ratios: posts.map(() => cropRatio)
+        crop_ratios: cropRatios
       };
       const response = await axios.post(`${API_URL}/drafts`, payload);
       alert(`Brouillon sauvegardé ! (ID: ${response.data.draft.id})`);
@@ -427,27 +427,13 @@ function App() {
             setUserContext={setUserContext}
             individualContexts={individualContexts}
             onContextChange={handleContextChange}
+            cropRatios={cropRatios}
+            onCropChange={(idx, value) => {
+              const newRatios = [...cropRatios];
+              newRatios[idx] = value;
+              setCropRatios(newRatios);
+            }}
           />
-
-          {/* Crop Ratio Selector */}
-          <div className="bg-card border border-border rounded-xl p-4 space-y-2">
-            <label className="text-sm font-medium text-gray-300">📐 Cadrage</label>
-            <div className="flex gap-2">
-              {CROP_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setCropRatio(opt.value)}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${cropRatio === opt.value
-                    ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-                    }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-gray-500">Images sauvegardées en qualité originale. Le recadrage est appliqué uniquement lors de la publication.</p>
-          </div>
 
           <div className="flex justify-end pt-4">
             <button
