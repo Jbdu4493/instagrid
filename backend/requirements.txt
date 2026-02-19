@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+openai
+pydantic
+python-multipart
+httpx
+requests
+pillow
+PyYAML
+boto3

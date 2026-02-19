@@ -1,0 +1,30 @@
+# Environment variables (secrets)
+.env
+
+# Token persistence
+backend/data/token.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Node
+node_modules/
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+backend/build_log.txt
