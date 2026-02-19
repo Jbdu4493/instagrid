@@ -43,15 +43,23 @@ app.add_middleware(
 # Initialize OpenAI Client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Initialize S3 Client
-s3_client = boto3.client(
-    "s3",
-    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-    region_name=os.environ.get("AWS_S3_REGION", "eu-west-3"),
-    config=BotoConfig(signature_version="s3v4")
-)
-S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "joe-bizet-instagrid")
+# Initialize S3 Client (optional — falls back to tmpfiles.org if not configured)
+USE_S3 = bool(os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"))
+s3_client = None
+S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "")
+
+if USE_S3:
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.environ.get("AWS_S3_REGION", "eu-west-3"),
+        config=BotoConfig(signature_version="s3v4")
+    )
+    S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "instagrid")
+    logger.info(f"S3 configured: bucket={S3_BUCKET}")
+else:
+    logger.info("No AWS credentials — using tmpfiles.org as fallback")
 
 # --- Token Persistence ---
 TOKEN_FILE = "data/token.json"
@@ -172,13 +180,39 @@ def upload_to_s3(image_bytes: bytes, key: str) -> str:
         Body=image_bytes,
         ContentType="image/jpeg"
     )
-    
     presigned_url = s3_client.generate_presigned_url(
         "get_object",
         Params={"Bucket": S3_BUCKET, "Key": key},
         ExpiresIn=3600
     )
     return presigned_url
+
+
+def upload_to_tmpfiles(image_bytes: bytes, filename: str) -> str:
+    """Upload image to tmpfiles.org (free, no account needed). Files expire after 1h."""
+    resp = requests.post(
+        "https://tmpfiles.org/api/v1/upload",
+        files={"file": (filename, image_bytes, "image/jpeg")}
+    )
+    if resp.status_code != 200:
+        raise Exception(f"tmpfiles.org upload failed: {resp.text}")
+    
+    raw_url = resp.json().get("data", {}).get("url", "")
+    # Convert to direct download link
+    public_url = raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+    # Ensure HTTPS
+    if public_url.startswith("http://"):
+        public_url = public_url.replace("http://", "https://", 1)
+    return public_url
+
+
+def upload_image(image_bytes: bytes, key: str) -> str:
+    """Upload image to S3 if configured, otherwise tmpfiles.org."""
+    if USE_S3:
+        return upload_to_s3(image_bytes, key)
+    else:
+        filename = key.split("/")[-1]  # extract filename from s3-style key
+        return upload_to_tmpfiles(image_bytes, filename)
 
 
 # --- Endpoints ---
@@ -469,7 +503,8 @@ async def post_to_grid(request: PostRequest):
     if not token or not user_id:
         raise HTTPException(status_code=400, detail="Missing Instagram credentials (access_token / ig_user_id).")
 
-    logger.info("Posting via Instagram Graph API + S3...")
+    hosting = "S3" if USE_S3 else "tmpfiles.org"
+    logger.info(f"Posting via Instagram Graph API + {hosting}...")
 
     # Grid: [Left (0), Middle (1), Right (2)]
     # Post Order: Right (2) -> Middle (1) -> Left (0)
@@ -490,10 +525,10 @@ async def post_to_grid(request: PostRequest):
             image_bytes = base64.b64decode(post.image_base64)
             image_bytes = compress_image(image_bytes)
             
-            # 2. Upload to S3
+            # 2. Upload image (S3 or tmpfiles.org)
             s3_key = f"temp/post_{timestamp}_{idx}.jpg"
-            logger.info(f"Uploading {position_name} to S3: s3://{S3_BUCKET}/{s3_key}")
-            public_url = upload_to_s3(image_bytes, s3_key)
+            logger.info(f"Uploading {position_name} via {hosting}...")
+            public_url = upload_image(image_bytes, s3_key)
             
             logger.info(f"Posting {position_name} via Graph API.")
             
