@@ -135,13 +135,58 @@ function App() {
     });
   };
 
+  // --- Canvas-based crop for sending to GPT ---
+  const RATIO_VALUES = { 'original': null, '1:1': 1, '4:5': 4 / 5, '16:9': 16 / 9 };
+
+  const cropImageCanvas = (file, ratio, position) => {
+    return new Promise((resolve) => {
+      if (ratio === 'original' || !RATIO_VALUES[ratio]) {
+        resolve(file);
+        return;
+      }
+      const img = new window.Image();
+      img.onload = () => {
+        const targetRatio = RATIO_VALUES[ratio];
+        const imgRatio = img.width / img.height;
+        const posX = (position?.x ?? 50) / 100;
+        const posY = (position?.y ?? 50) / 100;
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+
+        if (imgRatio > targetRatio) {
+          sw = Math.round(img.height * targetRatio);
+          const maxLeft = img.width - sw;
+          sx = Math.round(maxLeft * posX);
+        } else if (imgRatio < targetRatio) {
+          sh = Math.round(img.width / targetRatio);
+          const maxTop = img.height - sh;
+          sy = Math.round(maxTop * posY);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = sw;
+        canvas.height = sh;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.92);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleGenerateStrategy = async () => {
     if (files.some(f => !f)) return;
 
     setIsAnalyzing(true);
     try {
+      // Crop images client-side before sending to GPT
+      const croppedFiles = await Promise.all(
+        files.map((file, idx) => cropImageCanvas(file, cropRatios[idx], cropPositions[idx]))
+      );
+
       const formData = new FormData();
-      files.forEach(file => formData.append('files', file));
+      croppedFiles.forEach(file => formData.append('files', file));
 
       if (userContext) formData.append('user_context', userContext);
 
@@ -161,6 +206,8 @@ function App() {
         originalIndex: originalIndex,
         file: files[originalIndex],
         preview: previews[originalIndex],
+        cropRatio: cropRatios[originalIndex],
+        cropPosition: cropPositions[originalIndex],
         caption: res.captions[orderIndex],
         captions: [res.captions[orderIndex]],
         currentCaptionIndex: 0,
@@ -455,7 +502,7 @@ function App() {
               `}
             >
               {isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
-              {isAnalyzing ? 'Analyzing Visual Flow...' : 'Generate Strategy'}
+              {isAnalyzing ? 'Analyse en cours...' : '✨ Analyser la grille'}
             </button>
           </div>
         </section>
