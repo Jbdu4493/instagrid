@@ -181,6 +181,47 @@ def compress_image(image_bytes: bytes, max_size_kb: int = 800) -> bytes:
         return image_bytes
 
 
+CROP_RATIOS = {
+    "original": None,
+    "1:1": 1.0,
+    "4:5": 4.0 / 5.0,
+    "16:9": 16.0 / 9.0,
+}
+
+def crop_image(image_bytes: bytes, ratio: str) -> bytes:
+    """Center-crop image to target aspect ratio. Returns original if ratio is 'original'."""
+    if ratio == "original" or ratio not in CROP_RATIOS or CROP_RATIOS[ratio] is None:
+        return image_bytes
+
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        target_ratio = CROP_RATIOS[ratio]
+        img_ratio = img.width / img.height
+
+        if img_ratio > target_ratio:
+            # Image is wider — crop width
+            new_width = int(img.height * target_ratio)
+            left = (img.width - new_width) // 2
+            img = img.crop((left, 0, left + new_width, img.height))
+        elif img_ratio < target_ratio:
+            # Image is taller — crop height
+            new_height = int(img.width / target_ratio)
+            top = (img.height - new_height) // 2
+            img = img.crop((0, top, img.width, top + new_height))
+
+        output = io.BytesIO()
+        img.save(output, format='JPEG', quality=95)
+        logger.info(f"Cropped image to {ratio} ({img.width}x{img.height})")
+        return output.getvalue()
+
+    except Exception as e:
+        logger.error(f"Crop failed: {e}")
+        return image_bytes
+
+
 def upload_to_s3(image_bytes: bytes, key: str) -> str:
     """Upload image bytes to S3 and return a presigned URL (1h expiry)."""
     s3_client.put_object(
@@ -617,10 +658,12 @@ async def get_draft_image(filename: str):
 
 class SaveDraftRequest(BaseModel):
     posts: List[PostItem]
+    crop_ratios: Optional[List[str]] = None  # ["original", "1:1", "4:5", "16:9"]
 
 
 class UpdateDraftRequest(BaseModel):
-    captions: List[str]
+    captions: Optional[List[str]] = None
+    crop_ratios: Optional[List[str]] = None
 
 
 class PostDraftRequest(BaseModel):
@@ -642,7 +685,7 @@ async def list_drafts():
 
 @app.post("/drafts")
 async def save_draft(request: SaveDraftRequest):
-    """Save a new draft (3 images + captions)."""
+    """Save a new draft (3 images + captions). Images stored RAW — no compression."""
     if len(request.posts) != 3:
         raise HTTPException(400, "Must provide exactly 3 posts.")
 
@@ -650,18 +693,18 @@ async def save_draft(request: SaveDraftRequest):
     captions = []
     for post in request.posts:
         image_bytes = base64.b64decode(post.image_base64)
-        image_bytes = compress_image(image_bytes)
+        # NO compression — store raw for non-destructive editing
         images.append(image_bytes)
         captions.append(post.caption)
 
-    draft = draft_store.save_draft(images, captions)
+    draft = draft_store.save_draft(images, captions, request.crop_ratios)
     return {"status": "success", "message": f"Draft saved: {draft['id']}", "draft": draft}
 
 
 @app.put("/drafts/{draft_id}")
 async def update_draft(draft_id: str, request: UpdateDraftRequest):
-    """Update captions of an existing draft."""
-    draft = draft_store.update_draft(draft_id, request.captions)
+    """Update captions and/or crop ratios of an existing draft."""
+    draft = draft_store.update_draft(draft_id, request.captions, request.crop_ratios)
     if not draft:
         raise HTTPException(404, f"Draft '{draft_id}' not found")
     return {"status": "success", "message": f"Draft updated: {draft_id}", "draft": draft}
@@ -705,15 +748,25 @@ async def post_draft(draft_id: str, request: PostDraftRequest):
         position_name = ["Right", "Middle", "Left"][idx]
 
         try:
-            # Get the image URL from store
-            image_url = draft_store.get_image_url(post["image_key"])
+            # Get raw image from store
+            crop_ratio = post.get("crop_ratio", "original")
 
-            # If local store, we need to upload to tmpfiles first
-            if not USE_S3:
+            # Read raw image bytes
+            if USE_S3:
+                obj = s3_client.get_object(Bucket=S3_BUCKET, Key=post["image_key"])
+                image_bytes = obj["Body"].read()
+            else:
                 image_path = os.path.join("data/drafts/images", os.path.basename(post["image_key"]))
                 with open(image_path, "rb") as f:
                     image_bytes = f.read()
-                image_url = upload_image(image_bytes, f"temp/draft_{draft_id}_{idx}.jpg")
+
+            # Apply crop + compression (ONLY at post time — destructive step)
+            image_bytes = crop_image(image_bytes, crop_ratio)
+            image_bytes = compress_image(image_bytes)
+            logger.info(f"Prepared {position_name}: crop={crop_ratio}")
+
+            # Upload processed image for Graph API
+            image_url = upload_image(image_bytes, f"temp/draft_{draft_id}_{idx}.jpg")
 
             # Create container
             create_url = f"https://graph.facebook.com/v19.0/{user_id}/media"

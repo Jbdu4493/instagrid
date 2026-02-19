@@ -55,17 +55,23 @@ class DraftStore(ABC):
                 return d
         return None
 
-    def save_draft(self, images: list, captions: list) -> dict:
-        """Create a new draft with 3 images + captions."""
+    def save_draft(self, images: list, captions: list, crop_ratios: list = None) -> dict:
+        """Create a new draft with 3 images + captions. Images stored RAW (no compression)."""
         drafts = self.load_index()
         draft_id = uuid.uuid4().hex[:8]
         now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        if crop_ratios is None:
+            crop_ratios = ["original"] * len(images)
 
         posts = []
         for idx, (img_bytes, caption) in enumerate(zip(images, captions)):
             key = f"drafts/images/draft_{draft_id}_{idx}.jpg"
             self.save_image(img_bytes, key)
-            posts.append({"image_key": key, "caption": caption})
+            posts.append({
+                "image_key": key,
+                "caption": caption,
+                "crop_ratio": crop_ratios[idx] if idx < len(crop_ratios) else "original",
+            })
 
         draft = {
             "id": draft_id,
@@ -80,14 +86,19 @@ class DraftStore(ABC):
         logger.info(f"Draft saved: {draft_id}")
         return draft
 
-    def update_draft(self, draft_id: str, captions: list) -> Optional[dict]:
-        """Update captions of an existing draft."""
+    def update_draft(self, draft_id: str, captions: list = None, crop_ratios: list = None) -> Optional[dict]:
+        """Update captions and/or crop ratios of an existing draft."""
         drafts = self.load_index()
         for d in drafts:
             if d["id"] == draft_id:
-                for idx, caption in enumerate(captions):
-                    if idx < len(d["posts"]):
-                        d["posts"][idx]["caption"] = caption
+                if captions:
+                    for idx, caption in enumerate(captions):
+                        if idx < len(d["posts"]):
+                            d["posts"][idx]["caption"] = caption
+                if crop_ratios:
+                    for idx, ratio in enumerate(crop_ratios):
+                        if idx < len(d["posts"]):
+                            d["posts"][idx]["crop_ratio"] = ratio
                 d["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
                 self.save_index(drafts)
                 logger.info(f"Draft updated: {draft_id}")

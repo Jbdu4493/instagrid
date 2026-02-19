@@ -7,6 +7,20 @@ import StrategyPanel from './components/StrategyPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+const CROP_OPTIONS = [
+  { value: 'original', label: 'Original' },
+  { value: '1:1', label: '1:1' },
+  { value: '4:5', label: '4:5' },
+  { value: '16:9', label: '16:9' },
+];
+
+const ASPECT_CSS = {
+  'original': 'auto',
+  '1:1': '1/1',
+  '4:5': '4/5',
+  '16:9': '16/9',
+};
+
 function App() {
   // State for Upload Phase
   const [files, setFiles] = useState([null, null, null]);
@@ -25,6 +39,7 @@ function App() {
   const [drafts, setDrafts] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [draftPostingId, setDraftPostingId] = useState(null);
+  const [cropRatio, setCropRatio] = useState('original');
 
   // Instagram Credentials (Graph API)
   const [accessToken, setAccessToken] = useState('');
@@ -261,7 +276,8 @@ function App() {
         posts: posts.map(p => ({
           image_base64: p.preview.split(',')[1],
           caption: p.caption
-        }))
+        })),
+        crop_ratios: posts.map(() => cropRatio)
       };
       const response = await axios.post(`${API_URL}/drafts`, payload);
       alert(`Brouillon sauvegardé ! (ID: ${response.data.draft.id})`);
@@ -309,9 +325,12 @@ function App() {
     }
   };
 
-  const handleUpdateDraftCaption = async (draftId, captions) => {
+  const handleUpdateDraftCaption = async (draftId, captions, cropRatios = null) => {
     try {
-      await axios.put(`${API_URL}/drafts/${draftId}`, { captions });
+      const payload = {};
+      if (captions) payload.captions = captions;
+      if (cropRatios) payload.crop_ratios = cropRatios;
+      await axios.put(`${API_URL}/drafts/${draftId}`, payload);
       fetchDrafts();
     } catch (error) {
       alert("Erreur: " + (error.response?.data?.detail || error.message));
@@ -486,6 +505,26 @@ function App() {
 
             <div className="bg-card border border-border rounded-xl p-8 space-y-6">
 
+              {/* Crop Ratio Selector */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">📐 Cadrage (appliqué uniquement au moment du post)</label>
+                <div className="flex gap-2">
+                  {CROP_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setCropRatio(opt.value)}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${cropRatio === opt.value
+                        ? 'bg-purple-600 text-white ring-2 ring-purple-400'
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500">Les images sont sauvegardées en qualité originale. Le recadrage est appliqué uniquement lors de la publication.</p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-300">Instagram User ID</label>
@@ -608,21 +647,42 @@ function App() {
                     </span>
                   </div>
 
-                  {/* 3 Thumbnails + Captions */}
+                  {/* 3 Thumbnails + Captions + Crop */}
                   <div className="grid grid-cols-3 gap-4">
                     {draft.posts.map((post, idx) => (
                       <div key={idx} className="space-y-2">
-                        <img
-                          src={post.image_url}
-                          alt={`Draft ${draft.id} - ${idx}`}
-                          className="w-full aspect-square object-cover rounded-lg"
-                        />
+                        <div className="overflow-hidden rounded-lg bg-gray-900">
+                          <img
+                            src={post.image_url}
+                            alt={`Draft ${draft.id} - ${idx}`}
+                            className="w-full object-cover"
+                            style={{ aspectRatio: ASPECT_CSS[post.crop_ratio || 'original'] }}
+                          />
+                        </div>
+                        {/* Crop ratio per image */}
+                        <div className="flex gap-1">
+                          {CROP_OPTIONS.map(opt => (
+                            <button
+                              key={opt.value}
+                              onClick={() => {
+                                const newRatios = draft.posts.map(p => p.crop_ratio || 'original');
+                                newRatios[idx] = opt.value;
+                                draft.posts[idx].crop_ratio = opt.value;
+                                setDrafts([...drafts]);
+                                handleUpdateDraftCaption(draft.id, null, newRatios);
+                              }}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${(post.crop_ratio || 'original') === opt.value
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-800 text-gray-500 hover:text-white'
+                                }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
                         <textarea
                           value={post.caption}
                           onChange={(e) => {
-                            const newCaptions = draft.posts.map(p => p.caption);
-                            newCaptions[idx] = e.target.value;
-                            // Debounced save on blur
                             draft.posts[idx].caption = e.target.value;
                             setDrafts([...drafts]);
                           }}
