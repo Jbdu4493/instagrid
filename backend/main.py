@@ -61,6 +61,15 @@ if USE_S3:
 else:
     logger.info("No AWS credentials — using tmpfiles.org as fallback")
 
+# Initialize Draft Store
+from drafts import S3DraftStore, LocalDraftStore
+if USE_S3:
+    draft_store = S3DraftStore(s3_client, S3_BUCKET)
+    logger.info("DraftStore: S3")
+else:
+    draft_store = LocalDraftStore("data/drafts")
+    logger.info("DraftStore: Local (data/drafts/)")
+
 # --- Token Persistence ---
 TOKEN_FILE = "data/token.json"
 os.makedirs("data", exist_ok=True)
@@ -588,6 +597,184 @@ async def post_to_grid(request: PostRequest):
     return {
         "status": "success", 
         "message": "All 3 images posted via Graph API!",
+        "logs": results
+    }
+
+
+# --- Draft Endpoints ---
+
+# Serve local draft images (only used when S3 is not configured)
+from fastapi.responses import FileResponse
+
+@app.get("/drafts/image/{filename}")
+async def get_draft_image(filename: str):
+    """Serve a draft image from local storage."""
+    filepath = os.path.join("data/drafts/images", filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(404, "Image not found")
+    return FileResponse(filepath, media_type="image/jpeg")
+
+
+class SaveDraftRequest(BaseModel):
+    posts: List[PostItem]
+
+
+class UpdateDraftRequest(BaseModel):
+    captions: List[str]
+
+
+class PostDraftRequest(BaseModel):
+    access_token: Optional[str] = None
+    ig_user_id: Optional[str] = None
+    force: bool = False  # Set to True to re-post an already posted draft
+
+
+@app.get("/drafts")
+async def list_drafts():
+    """List all saved drafts."""
+    drafts = draft_store.list_drafts()
+    # Add image URLs to each draft
+    for draft in drafts:
+        for post in draft["posts"]:
+            post["image_url"] = draft_store.get_image_url(post["image_key"])
+    return {"drafts": drafts}
+
+
+@app.post("/drafts")
+async def save_draft(request: SaveDraftRequest):
+    """Save a new draft (3 images + captions)."""
+    if len(request.posts) != 3:
+        raise HTTPException(400, "Must provide exactly 3 posts.")
+
+    images = []
+    captions = []
+    for post in request.posts:
+        image_bytes = base64.b64decode(post.image_base64)
+        image_bytes = compress_image(image_bytes)
+        images.append(image_bytes)
+        captions.append(post.caption)
+
+    draft = draft_store.save_draft(images, captions)
+    return {"status": "success", "message": f"Draft saved: {draft['id']}", "draft": draft}
+
+
+@app.put("/drafts/{draft_id}")
+async def update_draft(draft_id: str, request: UpdateDraftRequest):
+    """Update captions of an existing draft."""
+    draft = draft_store.update_draft(draft_id, request.captions)
+    if not draft:
+        raise HTTPException(404, f"Draft '{draft_id}' not found")
+    return {"status": "success", "message": f"Draft updated: {draft_id}", "draft": draft}
+
+
+@app.delete("/drafts/{draft_id}")
+async def delete_draft(draft_id: str):
+    """Delete a draft and its images."""
+    deleted = draft_store.delete_draft(draft_id)
+    if not deleted:
+        raise HTTPException(404, f"Draft '{draft_id}' not found")
+    return {"status": "success", "message": f"Draft deleted: {draft_id}"}
+
+
+@app.post("/drafts/{draft_id}/post")
+async def post_draft(draft_id: str, request: PostDraftRequest):
+    """Post a draft to Instagram. Verifies publication before marking as posted."""
+    draft = draft_store.get_draft(draft_id)
+    if not draft:
+        raise HTTPException(404, f"Draft '{draft_id}' not found")
+
+    # Warning if already posted
+    if draft["status"] == "posted" and not request.force:
+        raise HTTPException(
+            409,
+            f"Ce brouillon a déjà été publié le {draft['posted_at']}. "
+            f"Envoyez force=true pour re-publier."
+        )
+
+    token = request.access_token or os.environ.get("IG_ACCESS_TOKEN")
+    user_id = request.ig_user_id or os.environ.get("IG_USER_ID")
+
+    if not token or not user_id:
+        raise HTTPException(400, "Missing Instagram credentials.")
+
+    # Post in LIFO order: Right (2) -> Middle (1) -> Left (0)
+    posts_ordered = [draft["posts"][2], draft["posts"][1], draft["posts"][0]]
+    results = []
+
+    for idx, post in enumerate(posts_ordered):
+        position_name = ["Right", "Middle", "Left"][idx]
+
+        try:
+            # Get the image URL from store
+            image_url = draft_store.get_image_url(post["image_key"])
+
+            # If local store, we need to upload to tmpfiles first
+            if not USE_S3:
+                image_path = os.path.join("data/drafts/images", os.path.basename(post["image_key"]))
+                with open(image_path, "rb") as f:
+                    image_bytes = f.read()
+                image_url = upload_image(image_bytes, f"temp/draft_{draft_id}_{idx}.jpg")
+
+            # Create container
+            create_url = f"https://graph.facebook.com/v19.0/{user_id}/media"
+            resp = requests.post(create_url, data={
+                "image_url": image_url,
+                "caption": post["caption"],
+                "access_token": token
+            })
+            if resp.status_code != 200:
+                raise Exception(f"Container Creation Failed: {resp.text}")
+
+            container_id = resp.json().get("id")
+            logger.info(f"Draft {draft_id} - Container created for {position_name}: {container_id}")
+
+            # Poll for status
+            status_url = f"https://graph.facebook.com/v19.0/{container_id}"
+            for attempt in range(12):
+                time.sleep(5)
+                status_resp = requests.get(status_url, params={
+                    "fields": "status_code",
+                    "access_token": token
+                })
+                status_code = status_resp.json().get("status_code", "UNKNOWN")
+                if status_code == "FINISHED":
+                    break
+                elif status_code == "ERROR":
+                    raise Exception(f"Container processing failed: {status_resp.json()}")
+            else:
+                raise Exception(f"Container {container_id} still not ready after 60s")
+
+            # Publish
+            pub_resp = requests.post(
+                f"https://graph.facebook.com/v19.0/{user_id}/media_publish",
+                data={"creation_id": container_id, "access_token": token}
+            )
+            if pub_resp.status_code != 200:
+                raise Exception(f"Publishing Failed: {pub_resp.text}")
+
+            post_id = pub_resp.json().get("id")
+
+            # Verify the post exists on IG (100% confirmation)
+            verify_resp = requests.get(
+                f"https://graph.facebook.com/v19.0/{post_id}",
+                params={"fields": "id,timestamp", "access_token": token}
+            )
+            if verify_resp.status_code != 200:
+                raise Exception(f"Post verification failed for {position_name}")
+
+            results.append(f"Posted {position_name}: ID {post_id} ✅ verified")
+            logger.info(f"Draft {draft_id} - {position_name} published and verified: {post_id}")
+
+        except Exception as e:
+            logger.error(f"Draft post error for {position_name}: {e}")
+            raise HTTPException(500, f"Publication failed at {position_name}: {str(e)}")
+
+    # All 3 posted successfully — mark as posted
+    draft_store.mark_as_posted(draft_id)
+
+    return {
+        "status": "success",
+        "message": f"Draft '{draft_id}' published to Instagram!",
         "logs": results
     }
 

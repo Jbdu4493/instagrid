@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Camera, Sparkles, Send, LayoutGrid, Instagram, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Upload, Camera, Sparkles, Send, LayoutGrid, Instagram, AlertCircle, Loader2, RefreshCw, Save, Trash2, Edit3, Eye } from 'lucide-react';
 import UploadSection from './components/UploadSection';
 import GridEditor from './components/GridEditor';
 import StrategyPanel from './components/StrategyPanel';
@@ -20,6 +20,11 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [postLogs, setPostLogs] = useState([]);
+
+  // Drafts
+  const [drafts, setDrafts] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [draftPostingId, setDraftPostingId] = useState(null);
 
   // Instagram Credentials (Graph API)
   const [accessToken, setAccessToken] = useState('');
@@ -43,7 +48,17 @@ function App() {
       }
     }
     fetchConfig();
+    fetchDrafts();
   }, []);
+
+  const fetchDrafts = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/drafts`);
+      setDrafts(res.data.drafts || []);
+    } catch (e) {
+      console.error("Failed to load drafts", e);
+    }
+  };
 
   const handleExchangeToken = async () => {
     if (!accessToken) {
@@ -239,6 +254,70 @@ function App() {
     }
   };
 
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    try {
+      const payload = {
+        posts: posts.map(p => ({
+          image_base64: p.preview.split(',')[1],
+          caption: p.caption
+        }))
+      };
+      const response = await axios.post(`${API_URL}/drafts`, payload);
+      alert(`Brouillon sauvegardé ! (ID: ${response.data.draft.id})`);
+      fetchDrafts();
+    } catch (error) {
+      alert("Erreur: " + (error.response?.data?.detail || error.message));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteDraft = async (draftId) => {
+    if (!confirm("Supprimer ce brouillon ?")) return;
+    try {
+      await axios.delete(`${API_URL}/drafts/${draftId}`);
+      fetchDrafts();
+    } catch (error) {
+      alert("Erreur: " + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  const handlePostDraft = async (draftId, force = false) => {
+    setDraftPostingId(draftId);
+    try {
+      const payload = {
+        access_token: accessToken,
+        ig_user_id: igUserId,
+        force
+      };
+      const response = await axios.post(`${API_URL}/drafts/${draftId}/post`, payload);
+      alert(response.data.message);
+      fetchDrafts();
+    } catch (error) {
+      const detail = error.response?.data?.detail || error.message;
+      if (error.response?.status === 409) {
+        if (confirm(detail + "\n\nRe-publier quand même ?")) {
+          handlePostDraft(draftId, true);
+          return;
+        }
+      } else {
+        alert("Erreur: " + detail);
+      }
+    } finally {
+      setDraftPostingId(null);
+    }
+  };
+
+  const handleUpdateDraftCaption = async (draftId, captions) => {
+    try {
+      await axios.put(`${API_URL}/drafts/${draftId}`, { captions });
+      fetchDrafts();
+    } catch (error) {
+      alert("Erreur: " + (error.response?.data?.detail || error.message));
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-dark text-white p-8 font-sans">
@@ -301,8 +380,8 @@ function App() {
 
           {exchangeResult && (
             <div className={`rounded-lg p-3 text-sm ${exchangeResult.status === 'success'
-                ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-                : 'bg-red-500/10 border border-red-500/20 text-red-400'
+              ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+              : 'bg-red-500/10 border border-red-500/20 text-red-400'
               }`}>
               {exchangeResult.message}
               {exchangeResult.token_type === 'permanent_page' && (
@@ -451,19 +530,32 @@ function App() {
                 </div>
               )}
 
-              <div className="pt-4 border-t border-gray-800">
+              <div className="pt-4 border-t border-gray-800 flex gap-3">
+                <button
+                  onClick={handleSaveDraft}
+                  disabled={isSaving}
+                  className={`
+                    flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
+                    ${isSaving
+                      ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 hover:shadow-lg hover:shadow-emerald-500/25'}
+                  `}
+                >
+                  {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+                  {isSaving ? 'Saving...' : '💾 Save Draft'}
+                </button>
                 <button
                   onClick={handlePostToInstagram}
                   disabled={isPosting}
                   className={`
-                    w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
+                    flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
                     ${isPosting
                       ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:shadow-lg hover:shadow-blue-500/25'}
                   `}
                 >
                   {isPosting ? <Loader2 className="animate-spin" /> : <Send />}
-                  {isPosting ? 'Posting to Instagram...' : 'Post to Instagram Grid'}
+                  {isPosting ? 'Posting...' : '🚀 Post Now'}
                 </button>
               </div>
 
@@ -475,6 +567,101 @@ function App() {
             </div>
           </section>
         )}
+
+        {/* 5. Saved Drafts Section */}
+        <section className="space-y-6 pb-20">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">5</span>
+              📋 Brouillons sauvegardés
+            </h2>
+            <button onClick={fetchDrafts} className="text-sm text-gray-400 hover:text-white transition-colors">
+              <RefreshCw size={16} className="inline mr-1" /> Rafraîchir
+            </button>
+          </div>
+
+          {drafts.length === 0 ? (
+            <div className="bg-card border border-border rounded-xl p-8 text-center text-gray-500">
+              Aucun brouillon sauvegardé. Créez une grille et cliquez "💾 Save Draft".
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {drafts.map(draft => (
+                <div key={draft.id} className={`bg-card border rounded-xl p-6 space-y-4 ${draft.status === 'posted' ? 'border-green-500/30' : 'border-border'
+                  }`}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-mono text-gray-400">#{draft.id}</span>
+                      {draft.status === 'posted' ? (
+                        <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+                          ✅ Publié le {new Date(draft.posted_at).toLocaleDateString('fr-FR')}
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          📝 Brouillon
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      Créé le {new Date(draft.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  {/* 3 Thumbnails + Captions */}
+                  <div className="grid grid-cols-3 gap-4">
+                    {draft.posts.map((post, idx) => (
+                      <div key={idx} className="space-y-2">
+                        <img
+                          src={post.image_url}
+                          alt={`Draft ${draft.id} - ${idx}`}
+                          className="w-full aspect-square object-cover rounded-lg"
+                        />
+                        <textarea
+                          value={post.caption}
+                          onChange={(e) => {
+                            const newCaptions = draft.posts.map(p => p.caption);
+                            newCaptions[idx] = e.target.value;
+                            // Debounced save on blur
+                            draft.posts[idx].caption = e.target.value;
+                            setDrafts([...drafts]);
+                          }}
+                          onBlur={() => {
+                            handleUpdateDraftCaption(draft.id, draft.posts.map(p => p.caption));
+                          }}
+                          className="w-full bg-dark border border-gray-700 rounded-lg p-2 text-white text-xs resize-none h-20 focus:ring-2 focus:ring-purple-500 outline-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2 border-t border-gray-800">
+                    <button
+                      onClick={() => handlePostDraft(draft.id)}
+                      disabled={draftPostingId === draft.id}
+                      className={`flex-1 py-2 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${draftPostingId === draft.id
+                        ? 'bg-gray-700 text-gray-400'
+                        : draft.status === 'posted'
+                          ? 'bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-500/20'
+                          : 'bg-blue-600 hover:bg-blue-500 text-white'
+                        }`}
+                    >
+                      {draftPostingId === draft.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                      {draft.status === 'posted' ? 'Re-publier' : 'Publier'}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteDraft(draft.id)}
+                      className="px-4 py-2 rounded-lg text-sm text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-all"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
       </div>
     </div>
