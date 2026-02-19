@@ -23,7 +23,7 @@ Résultat : une ligne de 3 photos parfaitement agencées sur votre profil, avec 
 ## ✨ Fonctionnalités
 
 - **Analyse visuelle IA** — Détecte le meilleur ordre de publication pour un flux visuel cohérent
-- **Captions bilingues FR/EN** — Générées par GPT-4o, avec fil conducteur commun
+- **Captions bilingues FR/EN** — Générées par GPT-5-mini, avec fil conducteur commun
 - **Hashtags stratégiques** — Pyramide broad → niche → spécifique
 - **Publication auto** — Poste les 3 images directement sur Instagram dans le bon ordre
 - **Token permanent** — Échange automatique du token (1h → ∞)
@@ -93,7 +93,7 @@ docker-compose up -d --build
                     ▼             ▼              ▼
               ┌──────────┐ ┌──────────┐  ┌────────────┐
               │ OpenAI   │ │  AWS S3  │  │ Instagram  │
-              │ GPT-4o   │ │ (ou tmp) │  │ Graph API  │
+              │ GPT-5    │ │ (ou tmp) │  │ Graph API  │
               └──────────┘ └──────────┘  └────────────┘
 ```
 
@@ -126,7 +126,7 @@ docker-compose up -d --build
 
 | Variable | Requis | Description |
 |----------|--------|-------------|
-| `OPENAI_API_KEY` | ✅ | Clé API OpenAI (GPT-4o) |
+| `OPENAI_API_KEY` | ✅ | Clé API OpenAI (GPT-5-mini) |
 | `IG_USER_ID` | ✅ | ID du compte Instagram Business |
 | `IG_ACCESS_TOKEN` | ✅ | Token d'accès Instagram |
 | `FB_APP_ID` | 📌 | ID de l'App Facebook (pour token permanent) |
@@ -164,4 +164,4 @@ Le token permanent est sauvegardé dans `backend/data/token.json` et rechargé a
 - **Backend** : Python, FastAPI, OpenAI, boto3, Pillow
 - **Frontend** : React, Vite, TailwindCSS, Lucide Icons
 - **Infra** : Docker, Nginx, AWS S3
-- **APIs** : Instagram Graph API, OpenAI GPT-4o
+- **APIs** : Instagram Graph API, OpenAI GPT-5-mini

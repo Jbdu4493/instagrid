@@ -410,7 +410,7 @@ async def analyze_images(
 
     try:
         response = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
@@ -466,7 +466,7 @@ async def regenerate_caption(request: RegenerateRequest):
 
     try:
         response = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}

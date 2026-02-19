@@ -242,22 +242,22 @@ if st.session_state.analysis_done:
 
     # --- 3. PUBLICATION ---
     st.markdown("---")
-    st.subheader("4. Publication")
+    st.subheader("4. Publication (Graph API)")
     
-    with st.form("instagram_login"):
-        col_u, col_p = st.columns(2)
-        with col_u:
-            username = st.text_input("Instagram Username")
-        with col_p:
-            password = st.text_input("Instagram Password", type="password")
+    with st.form("instagram_graph"):
+        col_id, col_token = st.columns(2)
+        with col_id:
+            ig_user_id = st.text_input("Instagram User ID", value=os.getenv("IG_USER_ID", ""))
+        with col_token:
+            access_token = st.text_input("Access Token", type="password", value=os.getenv("IG_ACCESS_TOKEN", ""))
         
         submit_post = st.form_submit_button("🚀 Post to Instagram Grid")
         
     if submit_post:
-        if not username or not password:
-            st.error("Please provide Instagram credentials.")
+        if not ig_user_id or not access_token:
+            st.error("Veuillez renseigner l'Instagram User ID et l'Access Token.")
         else:
-            with st.spinner("Authenticating & Posting (LIFO Sequence)..."):
+            with st.spinner("Publication via Graph API en cours..."):
                 try:
                     post_payload_list = []
                     for post in st.session_state.posts:
@@ -267,8 +267,8 @@ if st.session_state.analysis_done:
                         })
                     
                     req_body = {
-                        "username": username,
-                        "password": password,
+                        "ig_user_id": ig_user_id,
+                        "access_token": access_token,
                         "posts": post_payload_list
                     }
                     
