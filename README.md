@@ -1,6 +1,22 @@
 # 🎨 InstaGrid AI
 
-Outil IA pour créer des grilles Instagram parfaites en 3 posts. Analyse visuelle, génération de captions, et publication automatique via l'Instagram Graph API.
+Application d’**intelligence artificielle** qui automatise la publication de **grilles de 3 posts** sur Instagram.
+
+---
+
+## 📱 C'est quoi une grille de 3 ?
+
+Sur Instagram, le profil affiche les posts en **lignes de 3**. Un tryptique (3 images publiées dans le bon ordre) crée une **ligne visuelle cohérente** sur votre profil — c'est une technique utilisée par les créateurs et les marques pour donner un aspect professionnel et soigné à leur feed.
+
+InstaGrid AI automatise tout le processus :
+
+1. **Vous uploadez 3 images** dans l’interface
+2. **L’IA analyse** les images (couleurs, composition, ambiance) et détermine l’**ordre optimal** pour un flux visuel harmonieux
+3. **L’IA génère des captions** bilingues (FR/EN) avec un fil conducteur commun entre les 3 posts
+4. **L’IA propose des hashtags** stratégiques par pyramide (broad → niche → spécifique)
+5. **L’app publie automatiquement** les 3 posts dans le bon ordre sur Instagram via le Graph API
+
+Résultat : une ligne de 3 photos parfaitement agencées sur votre profil, avec des captions optimisées pour l’engagement.
 
 ---
 
@@ -9,9 +25,9 @@ Outil IA pour créer des grilles Instagram parfaites en 3 posts. Analyse visuell
 - **Analyse visuelle IA** — Détecte le meilleur ordre de publication pour un flux visuel cohérent
 - **Captions bilingues FR/EN** — Générées par GPT-4o, avec fil conducteur commun
 - **Hashtags stratégiques** — Pyramide broad → niche → spécifique
-- **Publication auto** — Poste les 3 images directement sur Instagram
+- **Publication auto** — Poste les 3 images directement sur Instagram dans le bon ordre
 - **Token permanent** — Échange automatique du token (1h → ∞)
-- **Double hébergement** — AWS S3 ou tmpfiles.org (aucun compte AWS requis)
+- **Double hébergement** — AWS S3 (recommandé) ou tmpfiles.org (fallback)
 
 ---
 
@@ -20,7 +36,7 @@ Outil IA pour créer des grilles Instagram parfaites en 3 posts. Analyse visuell
 ### 1. Cloner et configurer
 
 ```bash
-git clone https://github.com/VOTRE_USERNAME/instagrid.git
+git clone https://github.com/Jbdu4493/instagrid.git
 cd instagrid
 cp .env.example .env
 ```
@@ -115,10 +131,13 @@ docker-compose up -d --build
 | `IG_ACCESS_TOKEN` | ✅ | Token d'accès Instagram |
 | `FB_APP_ID` | 📌 | ID de l'App Facebook (pour token permanent) |
 | `FB_APP_SECRET` | 📌 | Secret de l'App Facebook |
-| `AWS_ACCESS_KEY_ID` | ❌ | Clé AWS (optionnel, sinon tmpfiles.org) |
-| `AWS_SECRET_ACCESS_KEY` | ❌ | Secret AWS |
-| `AWS_S3_BUCKET` | ❌ | Nom du bucket S3 |
-| `AWS_S3_REGION` | ❌ | Région AWS (défaut: `eu-west-3`) |
+| `AWS_ACCESS_KEY_ID` | ⚠️ | Clé AWS (fortement recommandé) |
+| `AWS_SECRET_ACCESS_KEY` | ⚠️ | Secret AWS |
+| `AWS_S3_BUCKET` | ⚠️ | Nom du bucket S3 |
+| `AWS_S3_REGION` | ⚠️ | Région AWS (défaut: `eu-west-3`) |
+
+> [!WARNING]
+> **Il est fortement recommandé d’utiliser AWS S3** pour l’hébergement des images. Le fallback `tmpfiles.org` fonctionne mais est un service tiers gratuit sans garantie de disponibilité ni de fiabilité. Pour un usage en production, S3 est bien plus stable et rapide.
 
 ---
 
