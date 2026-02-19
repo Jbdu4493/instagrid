@@ -188,10 +188,13 @@ CROP_RATIOS = {
     "16:9": 16.0 / 9.0,
 }
 
-def crop_image(image_bytes: bytes, ratio: str) -> bytes:
-    """Center-crop image to target aspect ratio. Returns original if ratio is 'original'."""
+def crop_image(image_bytes: bytes, ratio: str, position: dict = None) -> bytes:
+    """Center-crop image to target aspect ratio using position offsets."""
     if ratio == "original" or ratio not in CROP_RATIOS or CROP_RATIOS[ratio] is None:
         return image_bytes
+
+    if position is None:
+        position = {"x": 50, "y": 50}
 
     try:
         img = Image.open(io.BytesIO(image_bytes))
@@ -200,21 +203,25 @@ def crop_image(image_bytes: bytes, ratio: str) -> bytes:
 
         target_ratio = CROP_RATIOS[ratio]
         img_ratio = img.width / img.height
+        pos_x = max(0, min(100, position.get("x", 50))) / 100.0
+        pos_y = max(0, min(100, position.get("y", 50))) / 100.0
 
         if img_ratio > target_ratio:
             # Image is wider — crop width
             new_width = int(img.height * target_ratio)
-            left = (img.width - new_width) // 2
+            max_left = img.width - new_width
+            left = int(max_left * pos_x)
             img = img.crop((left, 0, left + new_width, img.height))
         elif img_ratio < target_ratio:
             # Image is taller — crop height
             new_height = int(img.width / target_ratio)
-            top = (img.height - new_height) // 2
+            max_top = img.height - new_height
+            top = int(max_top * pos_y)
             img = img.crop((0, top, img.width, top + new_height))
 
         output = io.BytesIO()
         img.save(output, format='JPEG', quality=95)
-        logger.info(f"Cropped image to {ratio} ({img.width}x{img.height})")
+        logger.info(f"Cropped image to {ratio} at pos ({position}) -> {img.width}x{img.height}")
         return output.getvalue()
 
     except Exception as e:
@@ -658,12 +665,14 @@ async def get_draft_image(filename: str):
 
 class SaveDraftRequest(BaseModel):
     posts: List[PostItem]
-    crop_ratios: Optional[List[str]] = None  # ["original", "1:1", "4:5", "16:9"]
+    crop_ratios: Optional[List[str]] = None
+    crop_positions: Optional[List[dict]] = None
 
 
 class UpdateDraftRequest(BaseModel):
     captions: Optional[List[str]] = None
     crop_ratios: Optional[List[str]] = None
+    crop_positions: Optional[List[dict]] = None
 
 
 class PostDraftRequest(BaseModel):
@@ -697,14 +706,14 @@ async def save_draft(request: SaveDraftRequest):
         images.append(image_bytes)
         captions.append(post.caption)
 
-    draft = draft_store.save_draft(images, captions, request.crop_ratios)
+    draft = draft_store.save_draft(images, captions, request.crop_ratios, request.crop_positions)
     return {"status": "success", "message": f"Draft saved: {draft['id']}", "draft": draft}
 
 
 @app.put("/drafts/{draft_id}")
 async def update_draft(draft_id: str, request: UpdateDraftRequest):
     """Update captions and/or crop ratios of an existing draft."""
-    draft = draft_store.update_draft(draft_id, request.captions, request.crop_ratios)
+    draft = draft_store.update_draft(draft_id, request.captions, request.crop_ratios, request.crop_positions)
     if not draft:
         raise HTTPException(404, f"Draft '{draft_id}' not found")
     return {"status": "success", "message": f"Draft updated: {draft_id}", "draft": draft}
@@ -761,7 +770,8 @@ async def post_draft(draft_id: str, request: PostDraftRequest):
                     image_bytes = f.read()
 
             # Apply crop + compression (ONLY at post time — destructive step)
-            image_bytes = crop_image(image_bytes, crop_ratio)
+            crop_position = post.get("crop_position", {"x": 50, "y": 50})
+            image_bytes = crop_image(image_bytes, crop_ratio, crop_position)
             image_bytes = compress_image(image_bytes)
             logger.info(f"Prepared {position_name}: crop={crop_ratio}")
 

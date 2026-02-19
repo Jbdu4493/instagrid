@@ -55,13 +55,15 @@ class DraftStore(ABC):
                 return d
         return None
 
-    def save_draft(self, images: list, captions: list, crop_ratios: list = None) -> dict:
+    def save_draft(self, images: list, captions: list, crop_ratios: list = None, crop_positions: list = None) -> dict:
         """Create a new draft with 3 images + captions. Images stored RAW (no compression)."""
         drafts = self.load_index()
         draft_id = uuid.uuid4().hex[:8]
         now = time.strftime("%Y-%m-%dT%H:%M:%S")
         if crop_ratios is None:
             crop_ratios = ["original"] * len(images)
+        if crop_positions is None:
+            crop_positions = [{"x": 50, "y": 50}] * len(images)
 
         posts = []
         for idx, (img_bytes, caption) in enumerate(zip(images, captions)):
@@ -71,6 +73,7 @@ class DraftStore(ABC):
                 "image_key": key,
                 "caption": caption,
                 "crop_ratio": crop_ratios[idx] if idx < len(crop_ratios) else "original",
+                "crop_position": crop_positions[idx] if idx < len(crop_positions) else {"x": 50, "y": 50},
             })
 
         draft = {
@@ -86,8 +89,8 @@ class DraftStore(ABC):
         logger.info(f"Draft saved: {draft_id}")
         return draft
 
-    def update_draft(self, draft_id: str, captions: list = None, crop_ratios: list = None) -> Optional[dict]:
-        """Update captions and/or crop ratios of an existing draft."""
+    def update_draft(self, draft_id: str, captions: list = None, crop_ratios: list = None, crop_positions: list = None) -> Optional[dict]:
+        """Update captions, crop ratios, and/or crop positions of an existing draft."""
         drafts = self.load_index()
         for d in drafts:
             if d["id"] == draft_id:
@@ -99,6 +102,10 @@ class DraftStore(ABC):
                     for idx, ratio in enumerate(crop_ratios):
                         if idx < len(d["posts"]):
                             d["posts"][idx]["crop_ratio"] = ratio
+                if crop_positions:
+                    for idx, pos in enumerate(crop_positions):
+                        if idx < len(d["posts"]):
+                            d["posts"][idx]["crop_position"] = pos
                 d["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
                 self.save_index(drafts)
                 logger.info(f"Draft updated: {draft_id}")

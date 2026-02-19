@@ -40,6 +40,7 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [draftPostingId, setDraftPostingId] = useState(null);
   const [cropRatios, setCropRatios] = useState(['original', 'original', 'original']);
+  const [cropPositions, setCropPositions] = useState([{ x: 50, y: 50 }, { x: 50, y: 50 }, { x: 50, y: 50 }]);
 
   // Instagram Credentials (Graph API)
   const [accessToken, setAccessToken] = useState('');
@@ -277,7 +278,8 @@ function App() {
           image_base64: p.preview.split(',')[1],
           caption: p.caption
         })),
-        crop_ratios: cropRatios
+        crop_ratios: cropRatios,
+        crop_positions: cropPositions
       };
       const response = await axios.post(`${API_URL}/drafts`, payload);
       alert(`Brouillon sauvegardé ! (ID: ${response.data.draft.id})`);
@@ -432,6 +434,12 @@ function App() {
               const newRatios = [...cropRatios];
               newRatios[idx] = value;
               setCropRatios(newRatios);
+            }}
+            cropPositions={cropPositions}
+            onPositionChange={(idx, pos) => {
+              const newPos = [...cropPositions];
+              newPos[idx] = pos;
+              setCropPositions(newPos);
             }}
           />
 
