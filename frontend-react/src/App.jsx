@@ -246,8 +246,8 @@ function App() {
 
         {/* Header */}
         <header className="flex items-center space-x-4 border-b border-border pb-6">
-          <div className="p-3 bg-gradient-to-br from-pink-500 to-purple-600 rounded-xl">
-            <Camera size={32} className="text-white" />
+          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg shadow-purple-500/20">
+            <img src="/logo.png" alt="InstaGrid Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500">

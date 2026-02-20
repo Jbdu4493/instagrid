@@ -42,8 +42,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Header ---
-st.title("📸 InstaGrid AI")
-st.markdown("### Create the perfect 3-post grid sequence.")
+col1, col2 = st.columns([1, 8])
+with col1:
+    st.image("logo.png", width=80)
+with col2:
+    st.title("InstaGrid AI")
+    st.markdown("### Create the perfect 3-post grid sequence.")
 
 # --- Session State Initialization ---
 if 'posts' not in st.session_state:

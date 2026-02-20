@@ -28,3 +28,5 @@ Thumbs.db
 
 # Build
 backend/build_log.txt
+
+launch.sh
