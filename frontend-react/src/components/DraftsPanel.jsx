@@ -129,12 +129,18 @@ function DraftsPanel({ accessToken, igUserId }) {
 
 
 function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPost, isPosting, allDrafts, setDrafts }) {
+    const [activeId, setActiveId] = useState(null);
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
 
+    const handleDragStart = (event) => {
+        setActiveId(event.active.id);
+    };
+
     const handleDragEnd = (event) => {
+        setActiveId(null);
         const { active, over } = event;
         if (over && active.id !== over.id) {
             const oldIndex = draft.posts.findIndex((p) => p.image_key === active.id);
@@ -199,9 +205,9 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
             {isExpanded && (
                 <div className="p-6 pt-0 space-y-4 border-t border-gray-800">
                     {/* 3 images with crop editing and drag reordering */}
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                         <SortableContext items={draft.posts.map((p) => p.image_key)} strategy={horizontalListSortingStrategy}>
-                            <div className="grid grid-cols-3 gap-4 mt-4">
+                            <div className="grid grid-cols-3 gap-4 mt-4 relative">
                                 {draft.posts.map((post, idx) => (
                                     <SortableDraftPostEditor
                                         key={post.image_key}
@@ -216,6 +222,19 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                                 ))}
                             </div>
                         </SortableContext>
+                        <DragOverlay adjustScale={true}>
+                            {activeId ? (
+                                <DraftPostEditor
+                                    post={draft.posts.find((p) => p.image_key === activeId)}
+                                    idx={draft.posts.findIndex((p) => p.image_key === activeId)}
+                                    draft={draft}
+                                    onUpdate={onUpdate}
+                                    allDrafts={allDrafts}
+                                    setDrafts={setDrafts}
+                                    isOverlay
+                                />
+                            ) : null}
+                        </DragOverlay>
                     </DndContext>
 
                     {/* Actions */}
@@ -263,7 +282,7 @@ function SortableDraftPostEditor(props) {
     );
 }
 
-function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, listeners }) {
+function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, listeners, isOverlay }) {
     const containerRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0, posX: 50, posY: 50 });
@@ -310,14 +329,14 @@ function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, lis
     }, [isOriginal, cropPosition, draft, post, onUpdate, allDrafts, setDrafts]);
 
     return (
-        <div className="space-y-2 relative group-editor">
+        <div className={`space-y-2 relative transition-all ${isOverlay ? 'scale-105 shadow-2xl ring-2 ring-purple-500 rounded-xl' : ''}`}>
             {/* Drag Handle Overlay for Reordering */}
             <div
                 {...listeners}
-                className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-md opacity-0 group-[.group-editor]:hover:opacity-100 transition-opacity z-10 cursor-grab active:cursor-grabbing hover:bg-purple-600"
-                title="Drag to reorder"
+                className="absolute top-2 right-2 bg-black/80 text-white p-2 rounded-lg shadow-xl z-20 cursor-grab active:cursor-grabbing hover:bg-purple-600 transition-colors border border-gray-600"
+                title="Glisser pour réorganiser (Gauche/Milieu/Droite)"
             >
-                <GripVertical size={14} />
+                <GripVertical size={16} />
             </div>
 
             {/* Image with crop preview */}
