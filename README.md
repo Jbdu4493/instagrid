@@ -26,9 +26,10 @@ Résultat : une ligne de 3 photos parfaitement agencées sur votre profil, avec 
 - **Captions bilingues FR/EN** — Générées par GPT-5-mini, avec fil conducteur commun
 - **Hashtags stratégiques** — Pyramide broad → niche → spécifique
 - **Publication auto** — Poste les 3 images directement sur Instagram dans le bon ordre
-- **💾 Brouillons** — Sauvegardez vos grilles pour les modifier et publier plus tard
-- **Token permanent** — Échange automatique du token (1h → ∞)
-- **Double hébergement** — AWS S3 (recommandé) ou tmpfiles.org (fallback)
+- **💾 Brouillons Avancés** — Sauvegardez vos grilles. Modifiez le recadrage (Crop), l'ordre des images (Drag-and-Drop) et les légendes à tout moment avant publication.
+- **Grille Instagram en direct** — Visualisez vos 12 derniers posts Instagram directement dans l'interface pour planifier votre feed.
+- **Paramètres & Token permanent** — Onglet dédié pour la gestion du token (échange automatique 1h → ∞).
+- **Double hébergement** — AWS S3 (recommandé) ou tmpfiles.org (fallback) pour stocker les images des brouillons en haute qualité.
 
 ---
 
@@ -74,10 +75,12 @@ docker-compose up -d --build
 
 ```
 1. Upload     → Glisser 3 images dans l'interface
-2. Contexte   → Ajouter du contexte (optionnel)
-3. Analyse    → L'IA détermine l'ordre optimal + génère les captions
-4. Édition    → Réordonner, regénérer les captions, ajouter des hashtags
-5. Publier    → Post automatique sur Instagram
+2. Contexte   → Ajouter un contexte global (optionnel)
+3. Analyse    → L'IA détermine l'ordre optimal + génère les légendes
+4. Édition    → Réordonner les images (Drag-and-Drop), modifier les recadrages, regénérer les légendes
+5. Sauvegarde → Sauvegarder en tant que brouillon pour une publication ultérieure
+6. Brouillons → Onglet Brouillons : réorganiser (Drag-and-Drop), recadrer et modifier le texte avec un bouton de sauvegarde manuelle
+7. Publier    → Post automatique sur Instagram
 ```
 
 ---
