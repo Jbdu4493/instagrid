@@ -430,15 +430,20 @@ function App() {
       <div className="max-w-6xl mx-auto space-y-12">
 
         {/* Header */}
-        <header className="flex items-center space-x-4 border-b border-border pb-6">
-          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg shadow-purple-500/20">
-            <img src="/logo.png" alt="InstaGrid Logo" className="w-full h-full object-cover" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500">
-              InstaGrid AI
-            </h1>
-            <p className="text-gray-400">Create the perfect 3-post grid sequence.</p>
+        <header className="flex flex-col md:flex-row md:items-center justify-between border-b border-border pb-6 gap-4">
+          <div className="flex items-center space-x-4">
+            <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg shadow-purple-500/20">
+              <img src="/logo.png" alt="InstaGrid Logo" className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black tracking-tight flex items-center gap-2">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500">
+                  InstaGrid
+                </span>
+                <span className="text-white">AI</span>
+              </h1>
+              <p className="text-gray-400 font-medium">Create the perfect 3-post grid sequence.</p>
+            </div>
           </div>
 
           {/* Tab Navigation */}
