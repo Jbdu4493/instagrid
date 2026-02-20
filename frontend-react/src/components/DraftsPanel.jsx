@@ -1,6 +1,9 @@
 import React, { useState, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { Send, Trash2, RefreshCw, Loader2, Move, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Trash2, RefreshCw, Loader2, Move, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -38,12 +41,13 @@ function DraftsPanel({ accessToken, igUserId }) {
 
     React.useEffect(() => { fetchDrafts(); }, [fetchDrafts]);
 
-    const handleUpdateDraft = async (draftId, captions, cropRatios, cropPositions) => {
+    const handleUpdateDraft = async (draftId, captions, cropRatios, cropPositions, postOrder) => {
         try {
             const payload = {};
             if (captions) payload.captions = captions;
             if (cropRatios) payload.crop_ratios = cropRatios;
             if (cropPositions) payload.crop_positions = cropPositions;
+            if (postOrder) payload.post_order = postOrder;
             await axios.put(`${API_URL}/drafts/${draftId}`, payload);
             fetchDrafts();
         } catch (e) {
@@ -125,6 +129,31 @@ function DraftsPanel({ accessToken, igUserId }) {
 
 
 function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPost, isPosting, allDrafts, setDrafts }) {
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    const handleDragEnd = (event) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            const oldIndex = draft.posts.findIndex((p, idx) => `post-${idx}` === active.id);
+            const newIndex = draft.posts.findIndex((p, idx) => `post-${idx}` === over.id);
+
+            // Create a new array of just the indices [0, 1, 2] and reorder it
+            const currentOrder = [0, 1, 2];
+            const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+
+            // Reorder the posts array locally for instant feedback
+            const reorderedPosts = arrayMove(draft.posts, oldIndex, newIndex);
+            draft.posts = reorderedPosts;
+            setDrafts([...allDrafts]);
+
+            // Save to backend using the new index array
+            onUpdate(draft.id, null, null, null, newOrder);
+        }
+    };
+
     return (
         <div className={`bg-card border rounded-xl overflow-hidden transition-all ${draft.status === 'posted' ? 'border-green-500/30' : 'border-border'
             }`}>
@@ -169,20 +198,25 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
             {/* Expanded content — full editing */}
             {isExpanded && (
                 <div className="p-6 pt-0 space-y-4 border-t border-gray-800">
-                    {/* 3 images with crop editing */}
-                    <div className="grid grid-cols-3 gap-4 mt-4">
-                        {draft.posts.map((post, idx) => (
-                            <DraftPostEditor
-                                key={idx}
-                                post={post}
-                                idx={idx}
-                                draft={draft}
-                                onUpdate={onUpdate}
-                                allDrafts={allDrafts}
-                                setDrafts={setDrafts}
-                            />
-                        ))}
-                    </div>
+                    {/* 3 images with crop editing and drag reordering */}
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={draft.posts.map((_, idx) => `post-${idx}`)} strategy={horizontalListSortingStrategy}>
+                            <div className="grid grid-cols-3 gap-4 mt-4">
+                                {draft.posts.map((post, idx) => (
+                                    <SortableDraftPostEditor
+                                        key={`post-${idx}`}
+                                        id={`post-${idx}`}
+                                        post={post}
+                                        idx={idx}
+                                        draft={draft}
+                                        onUpdate={onUpdate}
+                                        allDrafts={allDrafts}
+                                        setDrafts={setDrafts}
+                                    />
+                                ))}
+                            </div>
+                        </SortableContext>
+                    </DndContext>
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-3 border-t border-gray-800">
@@ -213,7 +247,23 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
 }
 
 
-function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts }) {
+function SortableDraftPostEditor(props) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes}>
+            <DraftPostEditor {...props} listeners={listeners} />
+        </div>
+    );
+}
+
+function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, listeners }) {
     const containerRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0, posX: 50, posY: 50 });
@@ -260,7 +310,16 @@ function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts }) {
     }, [isOriginal, cropPosition, draft, post, onUpdate, allDrafts, setDrafts]);
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-2 relative group-editor">
+            {/* Drag Handle Overlay for Reordering */}
+            <div
+                {...listeners}
+                className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-md opacity-0 group-[.group-editor]:hover:opacity-100 transition-opacity z-10 cursor-grab active:cursor-grabbing hover:bg-purple-600"
+                title="Drag to reorder"
+            >
+                <GripVertical size={14} />
+            </div>
+
             {/* Image with crop preview */}
             <div
                 ref={containerRef}

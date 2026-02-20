@@ -89,11 +89,15 @@ class DraftStore(ABC):
         logger.info(f"Draft saved: {draft_id}")
         return draft
 
-    def update_draft(self, draft_id: str, captions: list = None, crop_ratios: list = None, crop_positions: list = None) -> Optional[dict]:
-        """Update captions, crop ratios, and/or crop positions of an existing draft."""
+    def update_draft(self, draft_id: str, captions: list = None, crop_ratios: list = None, crop_positions: list = None, post_order: list = None) -> Optional[dict]:
+        """Update captions, crop ratios, crop positions, and/or post order of an existing draft."""
         drafts = self.load_index()
         for d in drafts:
             if d["id"] == draft_id:
+                if post_order and len(post_order) == len(d["posts"]):
+                    # Reorder the posts array based on the new index array
+                    d["posts"] = [d["posts"][i] for i in post_order]
+                
                 if captions:
                     for idx, caption in enumerate(captions):
                         if idx < len(d["posts"]):

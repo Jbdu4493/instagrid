@@ -701,6 +701,7 @@ class UpdateDraftRequest(BaseModel):
     captions: Optional[List[str]] = None
     crop_ratios: Optional[List[str]] = None
     crop_positions: Optional[List[dict]] = None
+    post_order: Optional[List[int]] = None
 
 
 class PostDraftRequest(BaseModel):
@@ -740,8 +741,14 @@ async def save_draft(request: SaveDraftRequest):
 
 @app.put("/drafts/{draft_id}")
 async def update_draft(draft_id: str, request: UpdateDraftRequest):
-    """Update captions and/or crop ratios of an existing draft."""
-    draft = draft_store.update_draft(draft_id, request.captions, request.crop_ratios, request.crop_positions)
+    """Update captions, crop ratios, crop positions, and/or post order of an existing draft."""
+    draft = draft_store.update_draft(
+        draft_id, 
+        request.captions, 
+        request.crop_ratios, 
+        request.crop_positions,
+        request.post_order
+    )
     if not draft:
         raise HTTPException(404, f"Draft '{draft_id}' not found")
     return {"status": "success", "message": f"Draft updated: {draft_id}", "draft": draft}
