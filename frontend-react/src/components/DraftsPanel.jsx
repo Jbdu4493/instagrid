@@ -137,8 +137,8 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
     const handleDragEnd = (event) => {
         const { active, over } = event;
         if (over && active.id !== over.id) {
-            const oldIndex = draft.posts.findIndex((p, idx) => `post-${idx}` === active.id);
-            const newIndex = draft.posts.findIndex((p, idx) => `post-${idx}` === over.id);
+            const oldIndex = draft.posts.findIndex((p) => p.image_key === active.id);
+            const newIndex = draft.posts.findIndex((p) => p.image_key === over.id);
 
             // Create a new array of just the indices [0, 1, 2] and reorder it
             const currentOrder = [0, 1, 2];
@@ -200,12 +200,12 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                 <div className="p-6 pt-0 space-y-4 border-t border-gray-800">
                     {/* 3 images with crop editing and drag reordering */}
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                        <SortableContext items={draft.posts.map((_, idx) => `post-${idx}`)} strategy={horizontalListSortingStrategy}>
+                        <SortableContext items={draft.posts.map((p) => p.image_key)} strategy={horizontalListSortingStrategy}>
                             <div className="grid grid-cols-3 gap-4 mt-4">
                                 {draft.posts.map((post, idx) => (
                                     <SortableDraftPostEditor
-                                        key={`post-${idx}`}
-                                        id={`post-${idx}`}
+                                        key={post.image_key}
+                                        id={post.image_key}
                                         post={post}
                                         idx={idx}
                                         draft={draft}
