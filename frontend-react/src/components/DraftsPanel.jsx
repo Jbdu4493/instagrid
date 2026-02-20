@@ -130,6 +130,10 @@ function DraftsPanel({ accessToken, igUserId }) {
 
 function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPost, isPosting, allDrafts, setDrafts }) {
     const [activeId, setActiveId] = useState(null);
+    const [isDirty, setIsDirty] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [currentOrder, setCurrentOrder] = useState([0, 1, 2]);
+
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -146,18 +150,30 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
             const oldIndex = draft.posts.findIndex((p) => p.image_key === active.id);
             const newIndex = draft.posts.findIndex((p) => p.image_key === over.id);
 
-            // Create a new array of just the indices [0, 1, 2] and reorder it
-            const currentOrder = [0, 1, 2];
             const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+            setCurrentOrder(newOrder);
 
-            // Reorder the posts array locally for instant feedback
             const reorderedPosts = arrayMove(draft.posts, oldIndex, newIndex);
             draft.posts = reorderedPosts;
             setDrafts([...allDrafts]);
 
-            // Save to backend using the new index array
-            onUpdate(draft.id, null, null, null, newOrder);
+            setIsDirty(true);
         }
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        const captions = draft.posts.map(p => p.caption);
+        const cropRatios = draft.posts.map(p => p.crop_ratio);
+        const cropPositions = draft.posts.map(p => p.crop_position || { x: 50, y: 50 });
+
+        const orderChanged = currentOrder[0] !== 0 || currentOrder[1] !== 1 || currentOrder[2] !== 2;
+
+        await onUpdate(draft.id, captions, cropRatios, cropPositions, orderChanged ? currentOrder : null);
+
+        setCurrentOrder([0, 1, 2]);
+        setIsDirty(false);
+        setIsSaving(false);
     };
 
     return (
@@ -215,7 +231,7 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                                         post={post}
                                         idx={idx}
                                         draft={draft}
-                                        onUpdate={onUpdate}
+                                        onMarkDirty={() => setIsDirty(true)}
                                         allDrafts={allDrafts}
                                         setDrafts={setDrafts}
                                     />
@@ -228,7 +244,7 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                                     post={draft.posts.find((p) => p.image_key === activeId)}
                                     idx={draft.posts.findIndex((p) => p.image_key === activeId)}
                                     draft={draft}
-                                    onUpdate={onUpdate}
+                                    onMarkDirty={() => setIsDirty(true)}
                                     allDrafts={allDrafts}
                                     setDrafts={setDrafts}
                                     isOverlay
@@ -239,6 +255,16 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-3 border-t border-gray-800">
+                        {isDirty && (
+                            <button
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className="flex-1 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all outline outline-emerald-500/50 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30"
+                            >
+                                {isSaving ? <Loader2 size={14} className="animate-spin" /> : <span>💾</span>}
+                                Enregistrer
+                            </button>
+                        )}
                         <button
                             onClick={() => onPost(draft.id)}
                             disabled={isPosting}
@@ -282,7 +308,7 @@ function SortableDraftPostEditor(props) {
     );
 }
 
-function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, listeners, isOverlay }) {
+function DraftPostEditor({ post, idx, draft, onMarkDirty, allDrafts, setDrafts, listeners, isOverlay }) {
     const containerRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0, posX: 50, posY: 50 });
@@ -316,9 +342,7 @@ function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, lis
 
         const handleMouseUp = () => {
             setIsDragging(false);
-            // Save ALL POST POSITIONS within this draft to backend
-            const positions = draft.posts.map(p => p.crop_position || { x: 50, y: 50 });
-            onUpdate(draft.id, null, null, positions);
+            onMarkDirty();
 
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
@@ -326,7 +350,7 @@ function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, lis
 
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
-    }, [isOriginal, cropPosition, draft, post, onUpdate, allDrafts, setDrafts]);
+    }, [isOriginal, cropPosition, draft, post, onMarkDirty, allDrafts, setDrafts]);
 
     return (
         <div className={`space-y-2 relative transition-all ${isOverlay ? 'scale-105 shadow-2xl ring-2 ring-purple-500 rounded-xl' : ''}`}>
@@ -372,11 +396,9 @@ function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, lis
                     <button
                         key={opt.value}
                         onClick={() => {
-                            const newRatios = draft.posts.map(p => p.crop_ratio || 'original');
-                            newRatios[idx] = opt.value;
                             post.crop_ratio = opt.value;
                             setDrafts([...allDrafts]);
-                            onUpdate(draft.id, null, newRatios);
+                            onMarkDirty();
                         }}
                         className={`flex-1 py-1 rounded text-[10px] font-semibold transition-all ${cropRatio === opt.value
                             ? 'bg-purple-600 text-white'
@@ -394,9 +416,7 @@ function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts, lis
                 onChange={(e) => {
                     post.caption = e.target.value;
                     setDrafts([...allDrafts]);
-                }}
-                onBlur={() => {
-                    onUpdate(draft.id, draft.posts.map(p => p.caption));
+                    onMarkDirty();
                 }}
                 className="w-full bg-dark border border-gray-700 rounded-lg p-2 text-white text-xs resize-none h-24 focus:ring-2 focus:ring-purple-500 outline-none"
                 placeholder="Caption..."
