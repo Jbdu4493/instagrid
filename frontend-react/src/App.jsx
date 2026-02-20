@@ -1,13 +1,30 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Camera, Sparkles, Send, LayoutGrid, Instagram, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Upload, Camera, Sparkles, Send, LayoutGrid, Instagram, AlertCircle, Loader2, RefreshCw, Save, Trash2, Edit3, Eye, FileText } from 'lucide-react';
 import UploadSection from './components/UploadSection';
 import GridEditor from './components/GridEditor';
 import StrategyPanel from './components/StrategyPanel';
+import DraftsPanel from './components/DraftsPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+const CROP_OPTIONS = [
+  { value: 'original', label: 'Original' },
+  { value: '1:1', label: '1:1' },
+  { value: '4:5', label: '4:5' },
+  { value: '16:9', label: '16:9' },
+];
+
+const ASPECT_CSS = {
+  'original': 'auto',
+  '1:1': '1/1',
+  '4:5': '4/5',
+  '16:9': '16/9',
+};
+
 function App() {
+  // Tab navigation
+  const [activeTab, setActiveTab] = useState('create');
   // State for Upload Phase
   const [files, setFiles] = useState([null, null, null]);
   const [previews, setPreviews] = useState([null, null, null]);
@@ -21,6 +38,13 @@ function App() {
   const [isPosting, setIsPosting] = useState(false);
   const [postLogs, setPostLogs] = useState([]);
 
+  // Drafts
+  const [drafts, setDrafts] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [draftPostingId, setDraftPostingId] = useState(null);
+  const [cropRatios, setCropRatios] = useState(['original', 'original', 'original']);
+  const [cropPositions, setCropPositions] = useState([{ x: 50, y: 50 }, { x: 50, y: 50 }, { x: 50, y: 50 }]);
+
   // Instagram Credentials (Graph API)
   const [accessToken, setAccessToken] = useState('');
   const [igUserId, setIgUserId] = useState('');
@@ -29,6 +53,10 @@ function App() {
   const [isExchanging, setIsExchanging] = useState(false);
   const [exchangeResult, setExchangeResult] = useState(null);
   const [fbAppConfigured, setFbAppConfigured] = useState(false);
+
+  // Recent Posts (IG Grid)
+  const [recentPosts, setRecentPosts] = useState([]);
+  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
 
   // Fetch Config
   useEffect(() => {
@@ -43,7 +71,35 @@ function App() {
       }
     }
     fetchConfig();
+    fetchDrafts();
   }, []);
+
+  useEffect(() => {
+    if (igUserId && accessToken) {
+      fetchRecentPosts();
+    }
+  }, [igUserId, accessToken]);
+
+  const fetchRecentPosts = async () => {
+    setIsLoadingRecent(true);
+    try {
+      const res = await axios.get(`${API_URL}/ig-posts?ig_user_id=${igUserId}&access_token=${accessToken}`);
+      setRecentPosts(res.data.posts || []);
+    } catch (error) {
+      console.error("Failed to load recent posts", error);
+    } finally {
+      setIsLoadingRecent(false);
+    }
+  };
+
+  const fetchDrafts = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/drafts`);
+      setDrafts(res.data.drafts || []);
+    } catch (e) {
+      console.error("Failed to load drafts", e);
+    }
+  };
 
   const handleExchangeToken = async () => {
     if (!accessToken) {
@@ -104,13 +160,58 @@ function App() {
     });
   };
 
+  // --- Canvas-based crop for sending to GPT ---
+  const RATIO_VALUES = { 'original': null, '1:1': 1, '4:5': 4 / 5, '16:9': 16 / 9 };
+
+  const cropImageCanvas = (file, ratio, position) => {
+    return new Promise((resolve) => {
+      if (ratio === 'original' || !RATIO_VALUES[ratio]) {
+        resolve(file);
+        return;
+      }
+      const img = new window.Image();
+      img.onload = () => {
+        const targetRatio = RATIO_VALUES[ratio];
+        const imgRatio = img.width / img.height;
+        const posX = (position?.x ?? 50) / 100;
+        const posY = (position?.y ?? 50) / 100;
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+
+        if (imgRatio > targetRatio) {
+          sw = Math.round(img.height * targetRatio);
+          const maxLeft = img.width - sw;
+          sx = Math.round(maxLeft * posX);
+        } else if (imgRatio < targetRatio) {
+          sh = Math.round(img.width / targetRatio);
+          const maxTop = img.height - sh;
+          sy = Math.round(maxTop * posY);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = sw;
+        canvas.height = sh;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.92);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleGenerateStrategy = async () => {
     if (files.some(f => !f)) return;
 
     setIsAnalyzing(true);
     try {
+      // Crop images client-side before sending to GPT
+      const croppedFiles = await Promise.all(
+        files.map((file, idx) => cropImageCanvas(file, cropRatios[idx], cropPositions[idx]))
+      );
+
       const formData = new FormData();
-      files.forEach(file => formData.append('files', file));
+      croppedFiles.forEach(file => formData.append('files', file));
 
       if (userContext) formData.append('user_context', userContext);
 
@@ -130,6 +231,8 @@ function App() {
         originalIndex: originalIndex,
         file: files[originalIndex],
         preview: previews[originalIndex],
+        cropRatio: cropRatios[originalIndex],
+        cropPosition: cropPositions[originalIndex],
         caption: res.captions[orderIndex],
         captions: [res.captions[orderIndex]],
         currentCaptionIndex: 0,
@@ -239,6 +342,88 @@ function App() {
     }
   };
 
+  const handleReset = () => {
+    if (!confirm("Effacer tout le projet en cours ?")) return;
+    setFiles([null, null, null]);
+    setPreviews([null, null, null]);
+    setUserContext('');
+    setIndividualContexts(['', '', '']);
+    setPosts([]);
+    setAnalysisResult(null);
+    setPostLogs([]);
+    setCropRatios(['original', 'original', 'original']);
+    setCropPositions([{ x: 50, y: 50 }, { x: 50, y: 50 }, { x: 50, y: 50 }]);
+  };
+
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    try {
+      const payload = {
+        posts: posts.map(p => ({
+          image_base64: p.preview.split(',')[1],
+          caption: p.caption
+        })),
+        crop_ratios: cropRatios,
+        crop_positions: cropPositions
+      };
+      const response = await axios.post(`${API_URL}/drafts`, payload);
+      alert(`Brouillon sauvegardé ! (ID: ${response.data.draft.id})`);
+      fetchDrafts();
+    } catch (error) {
+      alert("Erreur: " + (error.response?.data?.detail || error.message));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteDraft = async (draftId) => {
+    if (!confirm("Supprimer ce brouillon ?")) return;
+    try {
+      await axios.delete(`${API_URL}/drafts/${draftId}`);
+      fetchDrafts();
+    } catch (error) {
+      alert("Erreur: " + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  const handlePostDraft = async (draftId, force = false) => {
+    setDraftPostingId(draftId);
+    try {
+      const payload = {
+        access_token: accessToken,
+        ig_user_id: igUserId,
+        force
+      };
+      const response = await axios.post(`${API_URL}/drafts/${draftId}/post`, payload);
+      alert(response.data.message);
+      fetchDrafts();
+    } catch (error) {
+      const detail = error.response?.data?.detail || error.message;
+      if (error.response?.status === 409) {
+        if (confirm(detail + "\n\nRe-publier quand même ?")) {
+          handlePostDraft(draftId, true);
+          return;
+        }
+      } else {
+        alert("Erreur: " + detail);
+      }
+    } finally {
+      setDraftPostingId(null);
+    }
+  };
+
+  const handleUpdateDraftCaption = async (draftId, captions, cropRatios = null) => {
+    try {
+      const payload = {};
+      if (captions) payload.captions = captions;
+      if (cropRatios) payload.crop_ratios = cropRatios;
+      await axios.put(`${API_URL}/drafts/${draftId}`, payload);
+      fetchDrafts();
+    } catch (error) {
+      alert("Erreur: " + (error.response?.data?.detail || error.message));
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-dark text-white p-8 font-sans">
@@ -255,178 +440,71 @@ function App() {
             </h1>
             <p className="text-gray-400">Create the perfect 3-post grid sequence.</p>
           </div>
-        </header>
 
-        {/* Token Management (always visible) */}
-        <section className="bg-card border border-border rounded-xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              🔑 Token Instagram
-            </h2>
-            {accessToken && (
-              <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
-                Token configuré
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-400">Instagram User ID</label>
-              <input type="text" value={igUserId} onChange={(e) => setIgUserId(e.target.value)}
-                className="w-full bg-dark border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                placeholder="1784140xxxxxxx" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-400">Access Token</label>
-              <div className="flex gap-2">
-                <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
-                  className="flex-1 bg-dark border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                  placeholder="EAAB..." />
-                {fbAppConfigured && (
-                  <button
-                    onClick={handleExchangeToken}
-                    disabled={isExchanging || !accessToken}
-                    title="Échanger contre un token permanent"
-                    className={`px-4 rounded-lg font-semibold text-sm flex items-center gap-1.5 transition-all whitespace-nowrap
-                      ${isExchanging ? 'bg-gray-700 text-gray-400' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
-                  >
-                    {isExchanging ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    Étendre
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {exchangeResult && (
-            <div className={`rounded-lg p-3 text-sm ${exchangeResult.status === 'success'
-                ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-                : 'bg-red-500/10 border border-red-500/20 text-red-400'
-              }`}>
-              {exchangeResult.message}
-              {exchangeResult.token_type === 'permanent_page' && (
-                <span className="ml-2 font-semibold">♾️ Permanent</span>
-              )}
-              {exchangeResult.expires_in_days && (
-                <span className="ml-2 text-amber-300">⏳ {exchangeResult.expires_in_days}j</span>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* 1. Upload Section */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">1</span>
-            Upload & Context
-          </h2>
-          <UploadSection
-            files={files}
-            previews={previews}
-            onUpload={handleFileUpload}
-            userContext={userContext}
-            setUserContext={setUserContext}
-            individualContexts={individualContexts}
-            onContextChange={handleContextChange}
-          />
-
-          <div className="flex justify-end pt-4">
+          {/* Tab Navigation */}
+          <div className="flex gap-2">
             <button
-              onClick={handleGenerateStrategy}
-              disabled={files.some(f => !f) || isAnalyzing}
-              className={`
-                flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all
-                ${files.some(f => !f)
-                  ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 shadow-lg hover:shadow-pink-500/25'}
-              `}
+              onClick={() => setActiveTab('create')}
+              className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'create'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
+                : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
             >
-              {isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
-              {isAnalyzing ? 'Analyzing Visual Flow...' : 'Generate Strategy'}
+              <Sparkles size={16} />
+              Création
+            </button>
+            <button
+              onClick={() => setActiveTab('drafts')}
+              className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'drafts'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
+                : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+            >
+              <FileText size={16} />
+              Brouillons
             </button>
           </div>
-        </section>
+        </header>
 
-        {/* 2. Editor Section */}
-        {posts.length > 0 && (
-          <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold flex items-center gap-2">
-                <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">2</span>
-                Grid Editor (Visual Flow & Captions)
-              </h2>
-              <div className="text-sm text-gray-400 bg-card px-4 py-2 rounded-lg border border-border">
-                Review the AI-suggested order and captions. You can reorder if needed.
+        {activeTab === 'drafts' && (
+          <DraftsPanel accessToken={accessToken} igUserId={igUserId} />
+        )}
+
+        {activeTab === 'create' && (
+          <>
+            {/* Token Management */}
+            <section className="bg-card border border-border rounded-xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  🔑 Token Instagram
+                </h2>
+                {accessToken && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+                    Token configuré
+                  </span>
+                )}
               </div>
-            </div>
 
-            <GridEditor
-              posts={posts}
-              setPosts={setPosts}
-              onRegenerate={handleRegenerateCaption}
-              onHistoryNav={handleCaptionHistory}
-            />
-          </section>
-        )}
-
-        {/* 3. Strategy Section */}
-        {analysisResult && (
-          <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">3</span>
-              Strategy & Coherence
-            </h2>
-            <StrategyPanel
-              result={analysisResult}
-              onAppendHashtags={(ladders) => {
-                setPosts(prevPosts => prevPosts.map((p, idx) => {
-                  const ladder = ladders[idx];
-                  if (!ladder) return p;
-
-                  const tagsString = [...(ladder.broad || []), ...(ladder.niche || []), ...(ladder.specific || [])]
-                    .map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
-
-                  return {
-                    ...p,
-                    caption: p.caption + "\n\n" + tagsString
-                  };
-                }));
-              }}
-            />
-          </section>
-        )}
-
-        {/* 4. Publication Section */}
-        {posts.length > 0 && (
-          <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200 pb-20">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">4</span>
-              Publication
-            </h2>
-
-            <div className="bg-card border border-border rounded-xl p-8 space-y-6">
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">Instagram User ID</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-400">Instagram User ID</label>
                   <input type="text" value={igUserId} onChange={(e) => setIgUserId(e.target.value)}
-                    className="w-full bg-dark border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                    className="w-full bg-dark border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                     placeholder="1784140xxxxxxx" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">Access Token</label>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-400">Access Token</label>
                   <div className="flex gap-2">
                     <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
-                      className="flex-1 bg-dark border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                      className="flex-1 bg-dark border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                       placeholder="EAAB..." />
                     {fbAppConfigured && (
                       <button
                         onClick={handleExchangeToken}
                         disabled={isExchanging || !accessToken}
-                        title="Étendre le token (permanent)"
+                        title="Échanger contre un token permanent"
                         className={`px-4 rounded-lg font-semibold text-sm flex items-center gap-1.5 transition-all whitespace-nowrap
-                          ${isExchanging ? 'bg-gray-700 text-gray-400' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
+                      ${isExchanging ? 'bg-gray-700 text-gray-400' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
                       >
                         {isExchanging ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                         Étendre
@@ -437,43 +515,258 @@ function App() {
               </div>
 
               {exchangeResult && (
-                <div className={`rounded-lg p-4 text-sm font-mono ${exchangeResult.status === 'success'
+                <div className={`rounded-lg p-3 text-sm ${exchangeResult.status === 'success'
                   ? 'bg-green-500/10 border border-green-500/20 text-green-400'
                   : 'bg-red-500/10 border border-red-500/20 text-red-400'
                   }`}>
                   {exchangeResult.message}
                   {exchangeResult.token_type === 'permanent_page' && (
-                    <div className="mt-1 text-green-300 font-sans font-semibold">♾️ Ce token ne expire jamais.</div>
+                    <span className="ml-2 font-semibold">♾️ Permanent</span>
                   )}
                   {exchangeResult.expires_in_days && (
-                    <div className="mt-1 text-amber-300 font-sans">⏳ Expire dans {exchangeResult.expires_in_days} jours.</div>
+                    <span className="ml-2 text-amber-300">⏳ {exchangeResult.expires_in_days}j</span>
                   )}
                 </div>
               )}
+            </section>
 
-              <div className="pt-4 border-t border-gray-800">
+            {/* 0. Current Instagram Grid */}
+            {(igUserId && accessToken) && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">0</span>
+                    Grille Instagram Actuelle
+                  </h2>
+                  <button onClick={fetchRecentPosts} className="text-sm text-gray-400 hover:text-white transition-colors">
+                    <RefreshCw size={16} className={`inline mr-1 ${isLoadingRecent ? 'animate-spin' : ''}`} /> Rafraîchir
+                  </button>
+                </div>
+
+                <div className="bg-card border border-border rounded-xl p-6">
+                  {isLoadingRecent && recentPosts.length === 0 ? (
+                    <div className="flex justify-center py-8"><Loader2 className="animate-spin text-purple-500" /></div>
+                  ) : recentPosts.length === 0 ? (
+                    <div className="text-center text-gray-500 py-4">Aucun post récent trouvé.</div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-1 md:gap-4">
+                      {recentPosts.map(post => (
+                        <a
+                          key={post.id}
+                          href={post.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="relative aspect-square overflow-hidden group rounded-lg bg-gray-900 border border-gray-800"
+                        >
+                          {post.media_type === 'VIDEO' ? (
+                            <img src={post.thumbnail_url || post.media_url} alt="" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                          ) : (
+                            <img src={post.media_url} alt="" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                          )}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Instagram className="text-white" size={24} />
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* 1. Upload Section */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">1</span>
+                Upload & Context
+              </h2>
+              <UploadSection
+                files={files}
+                previews={previews}
+                onUpload={handleFileUpload}
+                userContext={userContext}
+                setUserContext={setUserContext}
+                individualContexts={individualContexts}
+                onContextChange={handleContextChange}
+                cropRatios={cropRatios}
+                onCropChange={(idx, value) => {
+                  const newRatios = [...cropRatios];
+                  newRatios[idx] = value;
+                  setCropRatios(newRatios);
+                }}
+                cropPositions={cropPositions}
+                onPositionChange={(idx, pos) => {
+                  const newPos = [...cropPositions];
+                  newPos[idx] = pos;
+                  setCropPositions(newPos);
+                }}
+              />
+
+              <div className="flex justify-end pt-4">
                 <button
-                  onClick={handlePostToInstagram}
-                  disabled={isPosting}
+                  onClick={handleGenerateStrategy}
+                  disabled={files.some(f => !f) || isAnalyzing}
                   className={`
-                    w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
-                    ${isPosting
-                      ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:shadow-lg hover:shadow-blue-500/25'}
-                  `}
+                flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all
+                ${files.some(f => !f)
+                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 shadow-lg hover:shadow-pink-500/25'}
+              `}
                 >
-                  {isPosting ? <Loader2 className="animate-spin" /> : <Send />}
-                  {isPosting ? 'Posting to Instagram...' : 'Post to Instagram Grid'}
+                  {isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                  {isAnalyzing ? 'Analyse en cours...' : '✨ Analyser la grille'}
                 </button>
               </div>
+            </section>
 
-              {postLogs.length > 0 && (
-                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-green-400 text-sm font-mono">
-                  {postLogs.map((log, i) => <div key={i}>✅ {log}</div>)}
+            {/* 2. Editor Section */}
+            {posts.length > 0 && (
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">2</span>
+                    Grid Editor (Visual Flow & Captions)
+                  </h2>
+                  <div className="text-sm text-gray-400 bg-card px-4 py-2 rounded-lg border border-border">
+                    Review the AI-suggested order and captions. You can reorder if needed.
+                  </div>
                 </div>
-              )}
-            </div>
-          </section>
+
+                <GridEditor
+                  posts={posts}
+                  setPosts={setPosts}
+                  onRegenerate={handleRegenerateCaption}
+                  onHistoryNav={handleCaptionHistory}
+                />
+              </section>
+            )}
+
+            {/* 3. Strategy Section */}
+            {analysisResult && (
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">3</span>
+                  Strategy & Coherence
+                </h2>
+                <StrategyPanel
+                  result={analysisResult}
+                  onAppendHashtags={(ladders) => {
+                    setPosts(prevPosts => prevPosts.map((p, idx) => {
+                      const ladder = ladders[idx];
+                      if (!ladder) return p;
+
+                      const tagsString = [...(ladder.broad || []), ...(ladder.niche || []), ...(ladder.specific || [])]
+                        .map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
+
+                      return {
+                        ...p,
+                        caption: p.caption + "\n\n" + tagsString
+                      };
+                    }));
+                  }}
+                />
+              </section>
+            )}
+
+            {/* 4. Publication Section */}
+            {posts.length > 0 && (
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200 pb-20">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">4</span>
+                  Publication
+                </h2>
+
+                <div className="bg-card border border-border rounded-xl p-8 space-y-6">
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-300">Instagram User ID</label>
+                      <input type="text" value={igUserId} onChange={(e) => setIgUserId(e.target.value)}
+                        className="w-full bg-dark border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                        placeholder="1784140xxxxxxx" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-300">Access Token</label>
+                      <div className="flex gap-2">
+                        <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
+                          className="flex-1 bg-dark border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="EAAB..." />
+                        {fbAppConfigured && (
+                          <button
+                            onClick={handleExchangeToken}
+                            disabled={isExchanging || !accessToken}
+                            title="Étendre le token (permanent)"
+                            className={`px-4 rounded-lg font-semibold text-sm flex items-center gap-1.5 transition-all whitespace-nowrap
+                          ${isExchanging ? 'bg-gray-700 text-gray-400' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
+                          >
+                            {isExchanging ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                            Étendre
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {exchangeResult && (
+                    <div className={`rounded-lg p-4 text-sm font-mono ${exchangeResult.status === 'success'
+                      ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                      : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                      }`}>
+                      {exchangeResult.message}
+                      {exchangeResult.token_type === 'permanent_page' && (
+                        <div className="mt-1 text-green-300 font-sans font-semibold">♾️ Ce token ne expire jamais.</div>
+                      )}
+                      {exchangeResult.expires_in_days && (
+                        <div className="mt-1 text-amber-300 font-sans">⏳ Expire dans {exchangeResult.expires_in_days} jours.</div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-4 border-t border-gray-800 flex gap-3">
+                    <button
+                      onClick={handleReset}
+                      className="px-4 py-4 rounded-xl text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-all flex items-center justify-center"
+                      title="Effacer le projet en cours"
+                    >
+                      <Trash2 />
+                    </button>
+                    <button
+                      onClick={handleSaveDraft}
+                      disabled={isSaving}
+                      className={`
+                    flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
+                    ${isSaving
+                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 hover:shadow-lg hover:shadow-emerald-500/25'}
+                  `}
+                    >
+                      {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+                      {isSaving ? 'Saving...' : '💾 Save Draft'}
+                    </button>
+                    <button
+                      onClick={handlePostToInstagram}
+                      disabled={isPosting}
+                      className={`
+                    flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
+                    ${isPosting
+                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:shadow-lg hover:shadow-blue-500/25'}
+                  `}
+                    >
+                      {isPosting ? <Loader2 className="animate-spin" /> : <Send />}
+                      {isPosting ? 'Posting...' : '🚀 Post Now'}
+                    </button>
+                  </div>
+
+                  {postLogs.length > 0 && (
+                    <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-green-400 text-sm font-mono">
+                      {postLogs.map((log, i) => <div key={i}>✅ {log}</div>)}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+          </>
         )}
 
       </div>

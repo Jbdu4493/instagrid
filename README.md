@@ -26,6 +26,7 @@ Résultat : une ligne de 3 photos parfaitement agencées sur votre profil, avec 
 - **Captions bilingues FR/EN** — Générées par GPT-5-mini, avec fil conducteur commun
 - **Hashtags stratégiques** — Pyramide broad → niche → spécifique
 - **Publication auto** — Poste les 3 images directement sur Instagram dans le bon ordre
+- **💾 Brouillons** — Sauvegardez vos grilles pour les modifier et publier plus tard
 - **Token permanent** — Échange automatique du token (1h → ∞)
 - **Double hébergement** — AWS S3 (recommandé) ou tmpfiles.org (fallback)
 
@@ -104,6 +105,7 @@ docker-compose up -d --build
 ```
 ├── backend/
 │   ├── main.py              # API FastAPI
+│   ├── drafts.py            # DraftStore (S3 ou local)
 │   ├── prompts.yaml          # Prompts OpenAI
 │   ├── requirements.txt
 │   ├── Dockerfile

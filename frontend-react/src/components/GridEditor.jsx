@@ -113,14 +113,25 @@ function PostCard({ post, index, onCaptionChange, onRegenerate, onHistoryNav, li
 
     if (!post) return null;
 
+    const ASPECT_MAP = { 'original': null, '1:1': '1/1', '4:5': '4/5', '16:9': '16/9' };
+    const cropRatio = post.cropRatio || 'original';
+    const cropPosition = post.cropPosition || { x: 50, y: 50 };
+    const isOriginal = cropRatio === 'original';
+    const aspectStyle = isOriginal ? {} : { aspectRatio: ASPECT_MAP[cropRatio] };
+
     return (
         <div className={clsx(
             "bg-card rounded-xl border border-border overflow-hidden flex flex-col h-full shadow-lg transition-shadow",
             isOverlay && "shadow-2xl ring-2 ring-purple-500 scale-105 cursor-grabbing"
         )}>
             {/* Image Header with Drag Handle */}
-            <div className="relative h-64 group cursor-grab active:cursor-grabbing">
-                <img src={post.preview} alt="Post" className="w-full h-full object-cover" />
+            <div className="relative group cursor-grab active:cursor-grabbing overflow-hidden" style={isOriginal ? { height: '256px' } : aspectStyle}>
+                <img
+                    src={post.preview}
+                    alt="Post"
+                    className="w-full h-full object-cover"
+                    style={isOriginal ? {} : { objectPosition: `${cropPosition.x}% ${cropPosition.y}%` }}
+                />
 
                 {/* Score Badge */}
                 {post.score !== null && post.score !== undefined && (
@@ -141,10 +152,15 @@ function PostCard({ post, index, onCaptionChange, onRegenerate, onHistoryNav, li
                     <GripVertical size={20} />
                 </div>
 
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 flex items-end justify-between">
                     <p className="text-xs text-secondary-foreground font-mono">
                         Position {index + 1} ({['Left', 'Middle', 'Right'][index]}) - ID: {post.originalIndex}
                     </p>
+                    {!isOriginal && (
+                        <span className="bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                            {cropRatio}
+                        </span>
+                    )}
                 </div>
             </div>
             {/* Caption Editor */}
