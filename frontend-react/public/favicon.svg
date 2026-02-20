@@ -1,0 +1,24 @@
+<svg xmlns="http://www.svg.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="url(#favicon-grad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="favicon-grad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EC4899" offset="0%" />
+      <stop stop-color="#A855F7" offset="50%" />
+      <stop stop-color="#6366F1" offset="100%" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer Box / Background if needed, but transparent is better for favicon -->
+  <!-- We just draw the LayoutGrid icon -->
+  <!-- Top Left -->
+  <rect x="8" y="8" width="20" height="20" rx="4" />
+  <!-- Top Right -->
+  <rect x="36" y="8" width="20" height="20" rx="4" />
+  <!-- Bottom Left -->
+  <rect x="8" y="36" width="20" height="20" rx="4" />
+  <!-- Bottom Right -->
+  <rect x="36" y="36" width="20" height="20" rx="4" />
+  
+  <!-- Sparkle Star -->
+  <path d="M48 10 l 4 -4 l 4 4 l -4 4 z" fill="#EC4899" stroke="none" />
+</svg>
