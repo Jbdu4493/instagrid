@@ -190,10 +190,10 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                             onClick={() => onPost(draft.id)}
                             disabled={isPosting}
                             className={`flex-1 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${isPosting
-                                    ? 'bg-gray-700 text-gray-400'
-                                    : draft.status === 'posted'
-                                        ? 'bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-500/20'
-                                        : 'bg-blue-600 hover:bg-blue-500 text-white'
+                                ? 'bg-gray-700 text-gray-400'
+                                : draft.status === 'posted'
+                                    ? 'bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-500/20'
+                                    : 'bg-blue-600 hover:bg-blue-500 text-white'
                                 }`}
                         >
                             {isPosting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
@@ -231,20 +231,26 @@ function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts }) {
         const handleMouseMove = (e) => {
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect) return;
-            const sensitivity = 0.5;
-            const newX = Math.max(0, Math.min(100, dragStart.current.posX - ((e.clientX - dragStart.current.x) / rect.width) * 100 * sensitivity));
-            const newY = Math.max(0, Math.min(100, dragStart.current.posY - ((e.clientY - dragStart.current.y) / rect.height) * 100 * sensitivity));
 
-            // Update locally
+            const deltaX = e.clientX - dragStart.current.x;
+            const deltaY = e.clientY - dragStart.current.y;
+
+            // Inverted delta (same as UploadSection): drag right -> content moves left -> lower x%
+            const sensitivity = 0.5;
+            const newX = Math.max(0, Math.min(100, dragStart.current.posX - (deltaX / rect.width) * 100 * sensitivity));
+            const newY = Math.max(0, Math.min(100, dragStart.current.posY - (deltaY / rect.height) * 100 * sensitivity));
+
+            // Update locally for instant preview
             post.crop_position = { x: Math.round(newX), y: Math.round(newY) };
             setDrafts([...allDrafts]);
         };
 
         const handleMouseUp = () => {
             setIsDragging(false);
-            // Save to backend
+            // Save ALL POST POSITIONS within this draft to backend
             const positions = draft.posts.map(p => p.crop_position || { x: 50, y: 50 });
             onUpdate(draft.id, null, null, positions);
+
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
@@ -295,8 +301,8 @@ function DraftPostEditor({ post, idx, draft, onUpdate, allDrafts, setDrafts }) {
                             onUpdate(draft.id, null, newRatios);
                         }}
                         className={`flex-1 py-1 rounded text-[10px] font-semibold transition-all ${cropRatio === opt.value
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-gray-800 text-gray-500 hover:text-white'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-gray-800 text-gray-500 hover:text-white'
                             }`}
                     >
                         {opt.label}
