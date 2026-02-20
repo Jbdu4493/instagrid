@@ -255,16 +255,17 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-3 border-t border-gray-800">
-                        {isDirty && (
-                            <button
-                                onClick={handleSave}
-                                disabled={isSaving}
-                                className="flex-1 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all outline outline-emerald-500/50 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30"
-                            >
-                                {isSaving ? <Loader2 size={14} className="animate-spin" /> : <span>💾</span>}
-                                Enregistrer
-                            </button>
-                        )}
+                        <button
+                            onClick={handleSave}
+                            disabled={!isDirty || isSaving}
+                            className={`flex-1 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${isDirty && !isSaving
+                                    ? 'outline outline-emerald-500/50 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
+                                    : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
+                                }`}
+                        >
+                            {isSaving ? <Loader2 size={14} className="animate-spin" /> : <span>💾</span>}
+                            Enregistrer
+                        </button>
                         <button
                             onClick={() => onPost(draft.id)}
                             disabled={isPosting}
