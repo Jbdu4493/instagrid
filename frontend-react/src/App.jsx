@@ -320,6 +320,19 @@ function App() {
     }
   };
 
+  const handleReset = () => {
+    if (!confirm("Effacer tout le projet en cours ?")) return;
+    setFiles([null, null, null]);
+    setPreviews([null, null, null]);
+    setUserContext('');
+    setIndividualContexts(['', '', '']);
+    setPosts([]);
+    setAnalysisResult(null);
+    setPostLogs([]);
+    setCropRatios(['original', 'original', 'original']);
+    setCropPositions([{ x: 50, y: 50 }, { x: 50, y: 50 }, { x: 50, y: 50 }]);
+  };
+
   const handleSaveDraft = async () => {
     setIsSaving(true);
     try {
@@ -644,6 +657,13 @@ function App() {
                   )}
 
                   <div className="pt-4 border-t border-gray-800 flex gap-3">
+                    <button
+                      onClick={handleReset}
+                      className="px-4 py-4 rounded-xl text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-all flex items-center justify-center"
+                      title="Effacer le projet en cours"
+                    >
+                      <Trash2 />
+                    </button>
                     <button
                       onClick={handleSaveDraft}
                       disabled={isSaving}
