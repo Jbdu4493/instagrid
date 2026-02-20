@@ -54,6 +54,10 @@ function App() {
   const [exchangeResult, setExchangeResult] = useState(null);
   const [fbAppConfigured, setFbAppConfigured] = useState(false);
 
+  // Recent Posts (IG Grid)
+  const [recentPosts, setRecentPosts] = useState([]);
+  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
+
   // Fetch Config
   useEffect(() => {
     async function fetchConfig() {
@@ -69,6 +73,24 @@ function App() {
     fetchConfig();
     fetchDrafts();
   }, []);
+
+  useEffect(() => {
+    if (igUserId && accessToken) {
+      fetchRecentPosts();
+    }
+  }, [igUserId, accessToken]);
+
+  const fetchRecentPosts = async () => {
+    setIsLoadingRecent(true);
+    try {
+      const res = await axios.get(`${API_URL}/ig-posts?ig_user_id=${igUserId}&access_token=${accessToken}`);
+      setRecentPosts(res.data.posts || []);
+    } catch (error) {
+      console.error("Failed to load recent posts", error);
+    } finally {
+      setIsLoadingRecent(false);
+    }
+  };
 
   const fetchDrafts = async () => {
     try {
@@ -507,6 +529,50 @@ function App() {
                 </div>
               )}
             </section>
+
+            {/* 0. Current Instagram Grid */}
+            {(igUserId && accessToken) && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <span className="bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-sm">0</span>
+                    Grille Instagram Actuelle
+                  </h2>
+                  <button onClick={fetchRecentPosts} className="text-sm text-gray-400 hover:text-white transition-colors">
+                    <RefreshCw size={16} className={`inline mr-1 ${isLoadingRecent ? 'animate-spin' : ''}`} /> Rafraîchir
+                  </button>
+                </div>
+
+                <div className="bg-card border border-border rounded-xl p-6">
+                  {isLoadingRecent && recentPosts.length === 0 ? (
+                    <div className="flex justify-center py-8"><Loader2 className="animate-spin text-purple-500" /></div>
+                  ) : recentPosts.length === 0 ? (
+                    <div className="text-center text-gray-500 py-4">Aucun post récent trouvé.</div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-1 md:gap-4">
+                      {recentPosts.map(post => (
+                        <a
+                          key={post.id}
+                          href={post.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="relative aspect-square overflow-hidden group rounded-lg bg-gray-900 border border-gray-800"
+                        >
+                          {post.media_type === 'VIDEO' ? (
+                            <img src={post.thumbnail_url || post.media_url} alt="" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                          ) : (
+                            <img src={post.media_url} alt="" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                          )}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Instagram className="text-white" size={24} />
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* 1. Upload Section */}
             <section className="space-y-4">

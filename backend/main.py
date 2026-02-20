@@ -648,6 +648,34 @@ async def post_to_grid(request: PostRequest):
         "logs": results
     }
 
+@app.get("/ig-posts")
+async def get_ig_posts(ig_user_id: str, access_token: str):
+    """
+    Fetch the last 12 media items for the given Instagram User ID.
+    Used for previewing the 'Grille Instagram Actuelle'.
+    """
+    if not ig_user_id or not access_token:
+        raise HTTPException(status_code=400, detail="Missing ig_user_id or access_token")
+    
+    url = f"https://graph.facebook.com/v19.0/{ig_user_id}/media"
+    params = {
+        "fields": "id,media_type,media_url,thumbnail_url,permalink,caption,timestamp",
+        "limit": 12,
+        "access_token": access_token
+    }
+    
+    try:
+        resp = requests.get(url, params=params)
+        if resp.status_code != 200:
+            logger.error(f"Failed to fetch IG posts: {resp.text}")
+            raise HTTPException(status_code=resp.status_code, detail=f"Graph API Error: {resp.text}")
+        
+        data = resp.json()
+        return {"posts": data.get("data", [])}
+    except Exception as e:
+        logger.error(f"Error fetching IG posts: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Draft Endpoints ---
 
