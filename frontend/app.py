@@ -8,7 +8,7 @@ import os
 # API URL
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
-st.set_page_config(page_title="InstaGrid AI", page_icon="📸", layout="wide")
+st.set_page_config(page_title="InstaGrid AI", page_icon="favicon.svg", layout="wide")
 
 # --- Styles ---
 st.markdown("""
