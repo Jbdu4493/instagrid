@@ -109,9 +109,9 @@ with tab_drafts:
                         cols = st.columns(3)
                         for idx, p in enumerate(d['posts']):
                             with cols[idx]:
-                                img_url = p.get('url', '')
+                                img_url = p.get('image_url', '')
                                 if not img_url.startswith("http"):
-                                    img_url = f"{API_URL}/image/{p.get('filename')}"
+                                    img_url = f"{API_URL}/image/{p.get('image_key')}"
                                 st.image(img_url, use_container_width=True)
                                 st.text_area("Légende", p.get('caption', ''), key=f"draft_{d['id']}_cap_{idx}", height=100, disabled=True)
                         
@@ -154,13 +154,18 @@ with tab_create:
                 if res.status_code == 200:
                     recent_posts = res.json().get("posts", [])
                     if recent_posts:
-                        cols = st.columns(3)
-                        for i, post in enumerate(recent_posts[:3]):
-                            with cols[i]:
-                                if post.get('media_type') == 'VIDEO':
-                                    st.image(post.get('thumbnail_url', post.get('media_url')), use_container_width=True)
-                                else:
-                                    st.image(post.get('media_url'), use_container_width=True)
+                        st.markdown("---")
+                        
+                        # Afficher les images par rangée de 3
+                        for i in range(0, min(9, len(recent_posts)), 3):
+                            cols = st.columns(3)
+                            row_posts = recent_posts[i:i+3]
+                            for j, post in enumerate(row_posts):
+                                with cols[j]:
+                                    if post.get('media_type') == 'VIDEO':
+                                        st.image(post.get('thumbnail_url', post.get('media_url')), use_container_width=True)
+                                    else:
+                                        st.image(post.get('media_url'), use_container_width=True)
                     else:
                         st.info("Aucun post récent trouvé sur ce compte.")
             except Exception as e:
