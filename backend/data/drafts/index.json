@@ -1,0 +1,38 @@
+[
+  {
+    "id": "6ff13a4f",
+    "created_at": "2026-02-25T20:24:12",
+    "updated_at": "2026-02-25T20:24:12",
+    "status": "draft",
+    "posted_at": null,
+    "posts": [
+      {
+        "image_key": "drafts/images/draft_6ff13a4f_0.jpg",
+        "caption": "Le tronc monumental s'ouvre en racines massives, témoins du temps et du sol. La nature reprend ses droits — racines et pierres se confondent.\n\nThe monumental trunk opens into massive roots, witnesses of time and soil. Nature reclaims its place — roots and stones intertwine.\n\n#travel #nature #photography #landscape #ancientruins #gianttrees #exploremore #TaProhm #rootsandstones #templeruins",
+        "crop_ratio": "original",
+        "crop_position": {
+          "x": 50,
+          "y": 50
+        }
+      },
+      {
+        "image_key": "drafts/images/draft_6ff13a4f_1.jpg",
+        "caption": "Un portail ancien happé par les racines — la lumière au loin invite à traverser. La nature reprend ses droits — racines et pierres se confondent.\n\nAn ancient gateway swallowed by roots — the light beyond invites you to pass through. Nature reclaims its place — roots and stones intertwine.\n\n#travelphotography #architecture #nature #junglearchitecture #ruinsoftheworld #treeandtemple #gatewaythroughroots #ancientarchway #losttemples",
+        "crop_ratio": "original",
+        "crop_position": {
+          "x": 50,
+          "y": 50
+        }
+      },
+      {
+        "image_key": "drafts/images/draft_6ff13a4f_2.jpg",
+        "caption": "Vue vertigineuse d'un arbre géant s'accrochant aux ruines, ses racines comme des doigts sur la pierre. La nature reprend ses droits — racines et pierres se confondent.\n\nA vertiginous view of a giant tree clinging to the ruins, its roots like fingers on the stone. Nature reclaims its place — roots and stones intertwine.\n\n#outdoorphotography #naturelovers #landscapephotography #treelovers #silhouette #moodytones #rootsoverwalls #canopyview #verticalscape",
+        "crop_ratio": "original",
+        "crop_position": {
+          "x": 50,
+          "y": 50
+        }
+      }
+    ]
+  }
+]
