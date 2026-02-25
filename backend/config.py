@@ -1,0 +1,50 @@
+import os
+import logging
+from openai import OpenAI
+import boto3
+from botocore.config import Config as BotoConfig
+from drafts import S3DraftStore, LocalDraftStore
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Global Configurations
+FB_APP_ID = os.environ.get("FB_APP_ID")
+FB_APP_SECRET = os.environ.get("FB_APP_SECRET")
+IG_USER_ID = os.environ.get("IG_USER_ID", "")
+
+# Initialize OpenAI Client
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+# Initialize S3 Client (optional — falls back to tmpfiles.org if not configured)
+USE_S3 = bool(os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"))
+s3_client = None
+S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "")
+
+if USE_S3:
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.environ.get("AWS_S3_REGION", "eu-west-3"),
+        config=BotoConfig(signature_version="s3v4")
+    )
+    S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "instagrid")
+    logger.info(f"S3 configured: bucket={S3_BUCKET}")
+else:
+    logger.info("No AWS credentials — using tmpfiles.org as fallback")
+
+# Initialize Draft Store
+if USE_S3:
+    draft_store = S3DraftStore(s3_client, S3_BUCKET)
+    logger.info("DraftStore: S3")
+else:
+    draft_store = LocalDraftStore("data/drafts")
+    logger.info("DraftStore: Local (data/drafts/)")
+
+TOKEN_FILE = "data/token.json"
+os.makedirs("data", exist_ok=True)

@@ -13,13 +13,13 @@ instagram_grid_analysis:
     1. **Ordre Visuel** : Détermine le meilleur ordre de gauche à droite (Gauche, Milieu, Droite).
     
     2. **Scores Individuels (individual_scores)** : Donne un score (0-100) pour CHAQUE image basé sur la qualité, l'esthétique et le potentiel d'engagement.
-       - Renvoie une liste de 3 entiers correspondant à l'ordre des images (utilisez les indices 0, 1, 2).
+       - Renvoie une liste de 3 entiers correspondant à l'ordre des images (utilisez les indices 0, 1, 2) qui permet un meilleur mise en scène .
     
     3. **Légendes (Captions)** : Rédige 3 légendes distinctes.
        **LANGUE** : DOIT être en **Français ET Anglais**.
        **STRUCTURE** :
        Pour chaque photo (de haut en bas) :
-       - [Phrase 1] : Spécifique à CETTE photo (détails, ambiance, contenu) soit créatif.
+       - [Phrase 1] : Spécifique à CETTE photo (détails, ambiance, contenu) soit créatif poétique sans trop l'etre.
        - [Phrase 2] : Une phrase "Fil Rouge" qui est IDENTIQUE (ou très similaire) sur les 3 photos pour les lier.
        
        Exemple de format :
@@ -36,7 +36,7 @@ instagram_grid_analysis:
     Renvoie UNIQUEMENT du JSON correspondant au schéma suivant :
     {{
       "common_thread_fr": "La phrase fil rouge en Français",
-      "common_thread_en": "The common thread sentence in English",
+      "common_thread_en": "La phrase fil rouge en Anglais",
       "suggested_order": [0, 1, 2],
       "captions": ["Légende 1...", "Légende 2...", "Légende 3..."],
       "individual_scores": [80, 85, 90],
@@ -50,19 +50,24 @@ single_image_caption:
     Tu es un expert en rédaction Instagram BILINGUE (Français/Anglais).
     Ta mission est de RÉGÉNÉRER la partie SPÉCIFIQUE de la légende pour UNE SEULE photo.
     
-    CONTEXTE DU "FIL ROUGE" (COMMON THREAD): {common_instruction}
-    CONTEXTE SPÉCIFIQUE DE LA PHOTO: {individual_context}
+    CONTEXTE DU "FIL ROUGE" (THÈME COMMUN) : {common_instruction}
+    CONTEXTE SPÉCIFIQUE DE LA PHOTO : {individual_context}
     
     VOICI LA PHRASE "FIL ROUGE" COMMUNE IMPOSÉE (NE PAS CHANGER) :
     FR: "{common_thread_fr}"
     EN: "{common_thread_en}"
     
+    HISTORIQUE DES LÉGENDES DÉJÀ GÉNÉRÉES :
+    {captions_history}
+    IMPORTANT : La nouvelle phrase générée DOIT être différente et éviter les répétitions avec cet historique.
+    
     TA TÂCHE :
     Rédige UNIQUEMENT la phrase "Spécifique" (la première partie) pour cette photo, en Français et en Anglais.
     Cette phrase doit être unique à l'image et compléter parfaitement la phrase "Fil Rouge" fournie.
+    Attention au emoji réutiliser les quand ils te sont fournies
 
     FORMAT DE SORTIE (JSON STRICT) :
     {{
       "specific_fr": "Nouvelle phrase spécifique en Français.",
-      "specific_en": "New specific sentence in English."
+      "specific_en": "Nouvelle phrase spécifique en Anglais."
     }}
