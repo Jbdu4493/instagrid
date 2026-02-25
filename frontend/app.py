@@ -146,10 +146,50 @@ with tab_drafts:
                                 if not img_url.startswith("http"):
                                     img_url = f"{API_URL}/image/{p.get('image_key')}"
                                 st.image(img_url, use_container_width=True)
+                                
+                                c_arrow_ld, c_arrow_rd = st.columns(2)
+                                with c_arrow_ld:
+                                    if idx > 0 and st.button("◀️ Déplacer", key=f"d_left_{d['id']}_{idx}"):
+                                        order = [0, 1, 2]
+                                        order[idx], order[idx-1] = order[idx-1], order[idx]
+                                        requests.put(f"{API_URL}/drafts/{d['id']}", json={"post_order": order})
+                                        st.rerun()
+                                with c_arrow_rd:
+                                    if idx < 2 and st.button("Déplacer ▶️", key=f"d_right_{d['id']}_{idx}"):
+                                        order = [0, 1, 2]
+                                        order[idx], order[idx+1] = order[idx+1], order[idx]
+                                        requests.put(f"{API_URL}/drafts/{d['id']}", json={"post_order": order})
+                                        st.rerun()
+                                        
                                 new_cap = st.text_area("Légende", p.get('caption', ''), key=f"draft_{d['id']}_cap_{idx}", height=100)
                                 p['new_caption'] = new_cap
+                                
+                                if st.button("🔄 Régénérer", key=f"d_regen_{d['id']}_{idx}"):
+                                    with st.spinner("Régénération..."):
+                                        try:
+                                            # Fetch image bytes to send base64
+                                            img_res = requests.get(img_url if img_url.startswith("http") else f"http://localhost:8000/drafts/image/{p.get('image_key').split('/')[-1]}")
+                                            img_b64 = base64.b64encode(img_res.content).decode('utf-8')
+                                            payload = {
+                                                "image_base64": img_b64,
+                                                "captions_history": [p.get('caption', '')]
+                                            }
+                                            reg_res = requests.post(f"{API_URL}/regenerate_caption", json=payload)
+                                            if reg_res.status_code == 200:
+                                                new_text = reg_res.json()["caption"]
+                                                # Save immediately to draft
+                                                current_captions = [pt.get('caption', '') for pt in d['posts']]
+                                                current_captions[idx] = new_text
+                                                requests.put(f"{API_URL}/drafts/{d['id']}", json={"captions": current_captions})
+                                                st.success("Régénéré !")
+                                                time.sleep(1)
+                                                st.rerun()
+                                            else:
+                                                st.error("Erreur de régénération.")
+                                        except Exception as e:
+                                            st.error(f"Erreur : {e}")
                         
-                        col_action0, col_action1, col_action2 = st.columns(3)
+                        _, col_action0, col_action1, col_action2 = st.columns([5, 1.5, 2.5, 1.5])
                         with col_action0:
                             if st.button("💾 Mettre à jour", key=f"update_{d['id']}"):
                                 new_captions = [p.get('new_caption', p.get('caption', '')) for p in d['posts']]
