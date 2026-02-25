@@ -42,10 +42,9 @@ USE_PCLOUD = bool(os.environ.get("USE_PCLOUD", "").lower() == "true" and os.envi
 PCLOUD_ACCESS_TOKEN = os.environ.get("PCLOUD_ACCESS_TOKEN", "")
 PCLOUD_FOLDER_ID = int(os.environ.get("PCLOUD_FOLDER_ID", "0"))
 
-if USE_PCLOUD:
-    logger.info("pCloud configured for StorageService")
-    storage_service = StorageService(PCloudStorage(PCLOUD_ACCESS_TOKEN, PCLOUD_FOLDER_ID))
-elif USE_S3:
+# Initialize Storage Strategy for Instagram Proxy Upload
+# (Facebook Graph API blocks pCloud direct links, so we use S3 or Tmpfiles.org temporarily just for publishing)
+if USE_S3:
     s3_client = boto3.client(
         "s3",
         aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
@@ -54,10 +53,10 @@ elif USE_S3:
         config=BotoConfig(signature_version="s3v4")
     )
     S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "instagrid")
-    logger.info(f"S3 configured: bucket={S3_BUCKET}")
+    logger.info(f"S3 configured for ephemeral StorageService: bucket={S3_BUCKET}")
     storage_service = StorageService(S3Storage(s3_client, S3_BUCKET))
 else:
-    logger.info("No AWS credentials — using tmpfiles.org as fallback storage")
+    logger.info("Using tmpfiles.org as fallback ephemeral StorageService")
     storage_service = StorageService(TmpfilesStorage())
 
 # Initialize Draft Store
