@@ -17,12 +17,17 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from services.storage import StorageService, S3Storage, TmpfilesStorage
+from services.instagram_service import InstagramService
 from security.token_manager import TokenManager
 
 # Global Configurations
 FB_APP_ID = os.environ.get("FB_APP_ID")
 FB_APP_SECRET = os.environ.get("FB_APP_SECRET")
 IG_USER_ID = os.environ.get("IG_USER_ID", "")
+
+# Instagram Graph API Service
+FACEBOOK_API_URL = "https://graph.facebook.com/v19.0"
+instagram_service = InstagramService(FACEBOOK_API_URL)
 
 # Initialize OpenAI Client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))

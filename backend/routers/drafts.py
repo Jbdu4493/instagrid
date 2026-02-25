@@ -5,9 +5,10 @@ import os
 import time
 import base64
 import requests
-from config import logger, draft_store, USE_S3, s3_client, S3_BUCKET, IG_USER_ID, storage_service
+from config import logger, draft_store, USE_S3, s3_client, S3_BUCKET, IG_USER_ID, storage_service, instagram_service
 from models import SaveDraftRequest, UpdateDraftRequest, PostDraftRequest
 from services.image_processor import compress_image, crop_image, ImageProcessingError
+from services.instagram_service import InstagramAPIError
 
 router = APIRouter()
 
@@ -20,56 +21,6 @@ def _get_raw_image_bytes(image_key: str) -> bytes:
     image_path = os.path.join("data/drafts/images", os.path.basename(image_key))
     with open(image_path, "rb") as f:
         return f.read()
-
-def _process_instagram_publication(user_id: str, token: str, image_url: str, caption: str) -> str:
-    """Handles the 3-step Graph API publication process (Create Container, Poll, Publish)."""
-    # 1. Create container
-    create_url = f"https://graph.facebook.com/v19.0/{user_id}/media"
-    resp = requests.post(create_url, data={
-        "image_url": image_url,
-        "caption": caption,
-        "access_token": token
-    })
-    if resp.status_code != 200:
-        raise Exception(f"Container Creation Failed: {resp.text}")
-
-    container_id = resp.json().get("id")
-
-    # 2. Poll for status
-    status_url = f"https://graph.facebook.com/v19.0/{container_id}"
-    for _ in range(12):
-        time.sleep(5)
-        status_resp = requests.get(status_url, params={
-            "fields": "status_code",
-            "access_token": token
-        })
-        status_code = status_resp.json().get("status_code", "UNKNOWN")
-        if status_code == "FINISHED":
-            break
-        elif status_code == "ERROR":
-            raise Exception(f"Container processing failed: {status_resp.json()}")
-    else:
-        raise Exception(f"Container {container_id} still not ready after 60s")
-
-    # 3. Publish
-    pub_resp = requests.post(
-        f"https://graph.facebook.com/v19.0/{user_id}/media_publish",
-        data={"creation_id": container_id, "access_token": token}
-    )
-    if pub_resp.status_code != 200:
-        raise Exception(f"Publishing Failed: {pub_resp.text}")
-
-    post_id = pub_resp.json().get("id")
-
-    # 4. Verify
-    verify_resp = requests.get(f"https://graph.facebook.com/v19.0/{post_id}", params={
-        "fields": "id,timestamp", "access_token": token
-    })
-    
-    if verify_resp.status_code != 200:
-        raise Exception("Post verification failed")
-
-    return post_id
 
 # Serve local draft images (only used when S3 is not configured)
 @router.get("/image/{filename}")
@@ -180,7 +131,10 @@ async def post_draft(draft_id: str, request: PostDraftRequest):
                 raise HTTPException(status_code=502, detail=f"Storage Erreur: {e}")
 
             # 4. Talk with Graph API to publish
-            post_id = _process_instagram_publication(user_id, token, image_url, post["caption"])
+            try:
+                post_id = instagram_service.publish_image(user_id, token, image_url, post["caption"])
+            except InstagramAPIError as e:
+                raise HTTPException(status_code=500, detail=f"Instagram API a échoué: {e}")
 
             results.append(f"Posted {position_name}: ID {post_id} ✅ verified")
             logger.info(f"Draft {draft_id} - {position_name} published and verified: {post_id}")
