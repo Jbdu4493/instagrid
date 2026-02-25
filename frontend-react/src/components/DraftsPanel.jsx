@@ -139,6 +139,16 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
 
+    const handleMove = (oldIndex, newIndex) => {
+        const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+        setCurrentOrder(newOrder);
+
+        const reorderedPosts = arrayMove(draft.posts, oldIndex, newIndex);
+        draft.posts = reorderedPosts;
+        setDrafts([...allDrafts]);
+        setIsDirty(true);
+    };
+
     const handleDragStart = (event) => {
         setActiveId(event.active.id);
     };
@@ -232,6 +242,7 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                                         idx={idx}
                                         draft={draft}
                                         onMarkDirty={() => setIsDirty(true)}
+                                        onMove={handleMove}
                                         allDrafts={allDrafts}
                                         setDrafts={setDrafts}
                                     />
@@ -259,8 +270,8 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                             onClick={handleSave}
                             disabled={!isDirty || isSaving}
                             className={`flex-1 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${isDirty && !isSaving
-                                    ? 'outline outline-emerald-500/50 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
-                                    : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
+                                ? 'outline outline-emerald-500/50 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
+                                : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
                                 }`}
                         >
                             {isSaving ? <Loader2 size={14} className="animate-spin" /> : <span>💾</span>}
@@ -309,9 +320,10 @@ function SortableDraftPostEditor(props) {
     );
 }
 
-function DraftPostEditor({ post, idx, draft, onMarkDirty, allDrafts, setDrafts, listeners, isOverlay }) {
+function DraftPostEditor({ post, idx, draft, onMarkDirty, onMove, allDrafts, setDrafts, listeners, isOverlay }) {
     const containerRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [isRegenerating, setIsRegenerating] = useState(false);
     const dragStart = useRef({ x: 0, y: 0, posX: 50, posY: 50 });
 
     const cropRatio = post.crop_ratio || 'original';
@@ -411,6 +423,32 @@ function DraftPostEditor({ post, idx, draft, onMarkDirty, allDrafts, setDrafts, 
                 ))}
             </div>
 
+            {/* Arrows for reordering */}
+            <div className="flex gap-2">
+                <button
+                    onClick={() => {
+                        if (idx > 0 && onMove) {
+                            onMove(idx, idx - 1);
+                        }
+                    }}
+                    disabled={idx === 0}
+                    className="flex-1 py-1 rounded text-xs font-semibold bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-50"
+                >
+                    ◀️ Déplacer
+                </button>
+                <button
+                    onClick={() => {
+                        if (idx < 2 && onMove) {
+                            onMove(idx, idx + 1);
+                        }
+                    }}
+                    disabled={idx === 2}
+                    className="flex-1 py-1 rounded text-xs font-semibold bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-50"
+                >
+                    Déplacer ▶️
+                </button>
+            </div>
+
             {/* Caption editor */}
             <textarea
                 value={post.caption}
@@ -422,6 +460,52 @@ function DraftPostEditor({ post, idx, draft, onMarkDirty, allDrafts, setDrafts, 
                 className="w-full bg-dark border border-gray-700 rounded-lg p-2 text-white text-xs resize-none h-24 focus:ring-2 focus:ring-purple-500 outline-none"
                 placeholder="Caption..."
             />
+
+            {/* Regenerate Caption button */}
+            <button
+                onClick={async () => {
+                    setIsRegenerating(true);
+                    try {
+                        let imgB64 = "";
+                        try {
+                            const url = post.image_url.startsWith('http') ? post.image_url : `${API_URL}/image/${post.image_key.split('/').pop()}`;
+                            const res = await axios.get(url, { responseType: 'blob' });
+                            const reader = new FileReader();
+                            const b64Promise = new Promise(resolve => {
+                                reader.onloadend = () => resolve(reader.result);
+                            });
+                            reader.readAsDataURL(res.data);
+                            const b64DataUrl = await b64Promise;
+                            imgB64 = b64DataUrl.split(',')[1];
+                        } catch (e) {
+                            alert("Impossible de récupérer l'image pour la régénération.");
+                            setIsRegenerating(false);
+                            return;
+                        }
+
+                        const payload = {
+                            image_base64: imgB64,
+                            captions_history: [post.caption] // Send current caption as context history
+                        };
+
+                        const regRes = await axios.post(`${API_URL}/regenerate_caption`, payload);
+                        if (regRes.status === 200) {
+                            post.caption = regRes.data.caption;
+                            setDrafts([...allDrafts]);
+                            onMarkDirty();
+                        }
+                    } catch (error) {
+                        alert("Erreur: " + (error.response?.data?.detail || error.message));
+                    } finally {
+                        setIsRegenerating(false);
+                    }
+                }}
+                disabled={isRegenerating}
+                className="w-full py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white flex justify-center items-center gap-1 transition-colors disabled:opacity-50"
+            >
+                {isRegenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                Régénérer
+            </button>
         </div>
     );
 }
