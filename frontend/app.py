@@ -3,6 +3,7 @@ import requests
 import base64
 from PIL import Image
 import os
+import time
 
 # --- Configuration ---
 API_URL = os.getenv("API_URL", "http://localhost:8000")
@@ -21,9 +22,41 @@ with col2:
     st.title("InstaGrid AI")
     st.markdown("### Créez la séquence parfaite de 3 posts Instagram.")
 
+import io
+
 # --- Helper Functions ---
 def file_to_base64(file):
     return base64.b64encode(file.getvalue()).decode('utf-8')
+
+def crop_image_for_ai(file, ratio_str, position):
+    if ratio_str == "original":
+        return file_to_base64(file)
+    
+    img = Image.open(file)
+    RATIOS = {'1:1': 1, '4:5': 4/5, '16:9': 16/9}
+    target_ratio = RATIOS.get(ratio_str)
+    if not target_ratio: 
+        return file_to_base64(file)
+    
+    img_ratio = img.width / img.height
+    posX = position.get("x", 50) / 100.0
+    posY = position.get("y", 50) / 100.0
+    
+    if img_ratio > target_ratio:
+        new_w = int(img.height * target_ratio)
+        offset_x = int((img.width - new_w) * posX)
+        box = (offset_x, 0, offset_x + new_w, img.height)
+    else:
+        new_h = int(img.width / target_ratio)
+        offset_y = int((img.height - new_h) * posY)
+        box = (0, offset_y, img.width, offset_y + new_h)
+        
+    cropped = img.crop(box)
+    buf = io.BytesIO()
+    if cropped.mode in ("RGBA", "P"):
+        cropped = cropped.convert("RGB")
+    cropped.save(buf, format="JPEG", quality=92)
+    return base64.b64encode(buf.getvalue()).decode('utf-8')
 
 @st.cache_data(ttl=60)
 def fetch_config():
@@ -113,9 +146,20 @@ with tab_drafts:
                                 if not img_url.startswith("http"):
                                     img_url = f"{API_URL}/image/{p.get('image_key')}"
                                 st.image(img_url, use_container_width=True)
-                                st.text_area("Légende", p.get('caption', ''), key=f"draft_{d['id']}_cap_{idx}", height=100, disabled=True)
+                                new_cap = st.text_area("Légende", p.get('caption', ''), key=f"draft_{d['id']}_cap_{idx}", height=100)
+                                p['new_caption'] = new_cap
                         
-                        col_action1, col_action2 = st.columns(2)
+                        col_action0, col_action1, col_action2 = st.columns(3)
+                        with col_action0:
+                            if st.button("💾 Mettre à jour", key=f"update_{d['id']}"):
+                                new_captions = [p.get('new_caption', p.get('caption', '')) for p in d['posts']]
+                                update_res = requests.put(f"{API_URL}/drafts/{d['id']}", json={"captions": new_captions})
+                                if update_res.status_code == 200:
+                                    st.success("Modifications enregistrées.")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Erreur de sauvegarde")
                         with col_action1:
                             if st.button("🚀 Publier sur Instagram", key=f"pub_{d['id']}", type="primary"):
                                 if not st.session_state.ig_user_id or not st.session_state.access_token:
@@ -215,7 +259,7 @@ with tab_create:
                      'id': idx,
                      'file': file,
                      'caption': '',
-                     'base64': file_to_base64(file),
+                     'base64': crop_image_for_ai(file, crop_selections[idx], {"x": crop_x[idx], "y": crop_y[idx]}),
                      'crop_ratio': crop_selections[idx],
                      'crop_pos': {"x": crop_x[idx], "y": crop_y[idx]}
                  })
@@ -271,6 +315,16 @@ with tab_create:
             with col:
                 st.image(post['file'], use_container_width=True)
                 st.caption(f"Position {idx + 1} ({['Gauche', 'Milieu', 'Droite'][idx]})")
+                
+                c_arrow_l, c_arrow_r = st.columns(2)
+                with c_arrow_l:
+                    if idx > 0 and st.button("◀️ Déplacer", key=f"left_{post['id']}"):
+                        st.session_state.posts[idx], st.session_state.posts[idx-1] = st.session_state.posts[idx-1], st.session_state.posts[idx]
+                        st.rerun()
+                with c_arrow_r:
+                    if idx < 2 and st.button("Déplacer ▶️", key=f"right_{post['id']}"):
+                        st.session_state.posts[idx], st.session_state.posts[idx+1] = st.session_state.posts[idx+1], st.session_state.posts[idx]
+                        st.rerun()
                 
                 # Légende text_area
                 new_caption = st.text_area("Légende", value=post['caption'], height=150, key=f"caption_edit_{post['id']}")
