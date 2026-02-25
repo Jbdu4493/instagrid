@@ -44,7 +44,11 @@ st.markdown("""
 # --- Header ---
 col1, col2 = st.columns([1, 8])
 with col1:
-    st.image("logo.png", width=80)
+    import os
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=80)
+    else:
+        st.markdown("📸")
 with col2:
     st.title("InstaGrid AI")
     st.markdown("### Create the perfect 3-post grid sequence.")
