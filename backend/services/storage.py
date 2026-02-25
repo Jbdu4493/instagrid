@@ -66,6 +66,86 @@ class S3Storage(StorageStrategy):
             logger.error(f"Erreur AWS S3 lors de l'upload: {e}", exc_info=True)
             raise StorageError("Échec de l'upload vers Amazon S3.") from e
 
+class PCloudStorage(StorageStrategy):
+    """
+    Implémentation de StorageStrategy pour pCloud.
+    """
+    def __init__(self, access_token: str, folder_id: int = 0):
+        self.access_token = access_token
+        self.folder_id = folder_id
+
+    def upload(self, image_bytes: bytes, key: str) -> str:
+        try:
+            filename = key.split("/")[-1]
+            
+            # 1. Upload the file
+            upload_url = "https://api.pcloud.com/uploadfile"
+            # create folder structure if needed? pcloud uploadfile doesn't create intermediate folders if we pass `path`.
+            # using `folderid` to dump everything in the same configured folder.
+            params = {
+                "folderid": self.folder_id,
+                "filename": filename,
+                "nopartial": 1
+            }
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            
+            files = {
+                "file": (filename, image_bytes, "image/jpeg")
+            }
+            
+            resp = requests.post(upload_url, params=params, headers=headers, files=files, timeout=60)
+            if resp.status_code != 200:
+                raise StorageError(f"HTTP {resp.status_code} de pCloud upload.")
+                
+            data = resp.json()
+            if data.get("result") != 0:
+                raise StorageError(f"Erreur API pCloud upload: {data.get('error')}")
+                
+            fileids = data.get("fileids", [])
+            if not fileids:
+                raise StorageError("pCloud n'a retourné aucun fileid.")
+                
+            fileid = fileids[0]
+            
+            # 2. Get public link
+            link_url = "https://api.pcloud.com/getfilepublink"
+            link_params = {"fileid": fileid}
+            link_resp = requests.post(link_url, params=link_params, headers=headers, timeout=30)
+            if link_resp.status_code != 200:
+                raise StorageError(f"HTTP {link_resp.status_code} de pCloud getfilepublink.")
+                
+            link_data = link_resp.json()
+            if link_data.get("result") != 0:
+                raise StorageError(f"Erreur API pCloud publink: {link_data.get('error')}")
+                
+            code = link_data.get("code")
+            
+            # 3. Get direct download link
+            dl_url = "https://api.pcloud.com/getpublinkdownload"
+            dl_params = {"code": code}
+            dl_resp = requests.post(dl_url, params=dl_params, headers=headers, timeout=30)
+            
+            if dl_resp.status_code != 200:
+                raise StorageError(f"HTTP {dl_resp.status_code} de pCloud getpublinkdownload.")
+                
+            dl_data = dl_resp.json()
+            if dl_data.get("result") != 0:
+                raise StorageError(f"Erreur API pCloud dl: {dl_data.get('error')}")
+                
+            hosts = dl_data.get("hosts", [])
+            path = dl_data.get("path", "")
+            
+            if not hosts or not path:
+                raise StorageError("Impossible de résoudre l'URL de téléchargement direct pCloud.")
+                
+            direct_url = f"https://{hosts[0]}{path}"
+            logger.info(f"Image uploadée sur pCloud avec succès: {key} -> {direct_url}")
+            return direct_url
+            
+        except requests.RequestException as e:
+            logger.error(f"Erreur réseau pCloud: {e}", exc_info=True)
+            raise StorageError("Échec de communication réseau avec pCloud.") from e
+
 class TmpfilesStorage(StorageStrategy):
     """
     Implémentation de StorageStrategy utilisant l'API publique temporaire tmpfiles.org.

@@ -12,36 +12,20 @@ from services.instagram_service import InstagramAPIError
 
 router = APIRouter()
 
-def _get_raw_image_bytes(image_key: str) -> bytes:
-    """Retrieve raw image bytes from S3 or local storage."""
-    if USE_S3:
-        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=image_key)
-        return obj["Body"].read()
-    
-    image_path = os.path.join("data/drafts/images", os.path.basename(image_key))
-    with open(image_path, "rb") as f:
-        return f.read()
-
-# Serve local draft images or proxy S3 images
+# Serve local draft images or proxy S3/pCloud images
 @router.get("/image/{filename}")
 async def get_draft_image(filename: str):
-    """Serve a draft image from local storage or proxy from S3 bypass CORS on client."""
+    """Serve a draft image from local storage or proxy from cloud bypass CORS on client."""
     from fastapi.responses import Response
 
-    if USE_S3:
-        try:
-            # Proxy directly from S3 to avoid client-side CORS issues or Redirect mismatches
-            key = f"drafts/images/{filename}"
-            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
-            return Response(content=obj["Body"].read(), media_type="image/jpeg")
-        except Exception as e:
-            logger.error(f"S3 Proxy error for {filename}: {e}")
-            raise HTTPException(404, "Image not found in S3")
-            
-    filepath = os.path.join("data/drafts/images", filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(404, "Image not found locally")
-    return FileResponse(filepath, media_type="image/jpeg")
+    try:
+        key = f"drafts/images/{filename}"
+        img_bytes = draft_store.get_raw_image_bytes(key)
+        return Response(content=img_bytes, media_type="image/jpeg")
+    except Exception as e:
+        logger.error(f"Image proxy error for {filename}: {e}")
+        # fallback to local just in case? Or we trust draft_store.get_raw_image_bytes which works locally too.
+        raise HTTPException(404, "Image not found")
 
 @router.get("/")
 async def list_drafts():
@@ -122,7 +106,7 @@ async def post_draft(draft_id: str, request: PostDraftRequest):
 
         try:
             # 1. Fetch raw image from Data Store
-            image_bytes = _get_raw_image_bytes(post["image_key"])
+            image_bytes = draft_store.get_raw_image_bytes(post["image_key"])
 
             # 2. Apply crop + compression
             crop_ratio = post.get("crop_ratio", "original")

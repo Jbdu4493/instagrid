@@ -43,6 +43,11 @@ class DraftStore(ABC):
         """Delete an image."""
         ...
 
+    @abstractmethod
+    def get_raw_image_bytes(self, key: str) -> bytes:
+        """Get raw image bytes."""
+        ...
+
     # --- High-level operations ---
 
     def list_drafts(self) -> list:
@@ -193,6 +198,10 @@ class S3DraftStore(DraftStore):
     def delete_image(self, key: str):
         self.s3.delete_object(Bucket=self.bucket, Key=key)
 
+    def get_raw_image_bytes(self, key: str) -> bytes:
+        obj = self.s3.get_object(Bucket=self.bucket, Key=key)
+        return obj["Body"].read()
+
 
 # --- Local Filesystem Implementation ---
 
@@ -231,3 +240,68 @@ class LocalDraftStore(DraftStore):
         filepath = os.path.join(self.images_dir, os.path.basename(key))
         if os.path.exists(filepath):
             os.remove(filepath)
+
+    def get_raw_image_bytes(self, key: str) -> bytes:
+        filepath = os.path.join(self.images_dir, os.path.basename(key))
+        with open(filepath, "rb") as f:
+            return f.read()
+
+# --- pCloud Implementation ---
+
+class PCloudDraftStore(DraftStore):
+    def __init__(self, access_token: str, folder_id: int = 0, base_dir: str = "data/drafts"):
+        import requests
+        self.access_token = access_token
+        self.folder_id = folder_id
+        self.base_dir = base_dir
+        self.index_path = os.path.join(base_dir, "index.json")
+        os.makedirs(self.base_dir, exist_ok=True)
+        self.headers = {"Authorization": f"Bearer {self.access_token}"}
+        self.requests = requests
+
+    def load_index(self) -> list:
+        try:
+            if os.path.exists(self.index_path):
+                with open(self.index_path, "r") as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load drafts index: {e}")
+        return []
+
+    def save_index(self, drafts: list):
+        with open(self.index_path, "w") as f:
+            json.dump(drafts, f, indent=2, ensure_ascii=False)
+
+    def save_image(self, image_bytes: bytes, key: str):
+        filename = key.split("/")[-1]
+        params = {"folderid": self.folder_id, "filename": filename, "nopartial": 1}
+        files = {"file": (filename, image_bytes, "image/jpeg")}
+        resp = self.requests.post("https://api.pcloud.com/uploadfile", params=params, headers=self.headers, files=files, timeout=60)
+        if resp.status_code != 200 or resp.json().get("result") != 0:
+            logger.error(f"PCloud save_image error: {resp.text}")
+
+    def get_image_url(self, key: str) -> str:
+        # Proxy through backend to avoid frontend CORS issues.
+        return f"/drafts/image/{os.path.basename(key)}"
+
+    def delete_image(self, key: str):
+        filename = key.split("/")[-1]
+        params = {"path": f"/{filename}"}
+        resp = self.requests.post("https://api.pcloud.com/deletefile", params=params, headers=self.headers, timeout=30)
+        if resp.status_code != 200 or resp.json().get("result") != 0:
+            logger.warning(f"PCloud delete_image error: {resp.text}")
+
+    def get_raw_image_bytes(self, key: str) -> bytes:
+        filename = key.split("/")[-1]
+        params = {"path": f"/{filename}"}
+        resp = self.requests.post("https://api.pcloud.com/getfilelink", params=params, headers=self.headers, timeout=30)
+        if resp.status_code == 200 and resp.json().get("result") == 0:
+            data = resp.json()
+            hosts = data.get("hosts", [])
+            path = data.get("path", "")
+            if hosts and path:
+                dl_url = f"https://{hosts[0]}{path}"
+                img_resp = self.requests.get(dl_url, timeout=30)
+                if img_resp.status_code == 200:
+                    return img_resp.content
+        raise Exception(f"Could not fetch raw image {filename} from pCloud")
