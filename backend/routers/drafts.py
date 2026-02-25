@@ -22,13 +22,25 @@ def _get_raw_image_bytes(image_key: str) -> bytes:
     with open(image_path, "rb") as f:
         return f.read()
 
-# Serve local draft images (only used when S3 is not configured)
+# Serve local draft images or proxy S3 images
 @router.get("/image/{filename}")
 async def get_draft_image(filename: str):
-    """Serve a draft image from local storage."""
+    """Serve a draft image from local storage or proxy from S3 bypass CORS on client."""
+    from fastapi.responses import Response
+
+    if USE_S3:
+        try:
+            # Proxy directly from S3 to avoid client-side CORS issues or Redirect mismatches
+            key = f"drafts/images/{filename}"
+            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+            return Response(content=obj["Body"].read(), media_type="image/jpeg")
+        except Exception as e:
+            logger.error(f"S3 Proxy error for {filename}: {e}")
+            raise HTTPException(404, "Image not found in S3")
+            
     filepath = os.path.join("data/drafts/images", filename)
     if not os.path.exists(filepath):
-        raise HTTPException(404, "Image not found")
+        raise HTTPException(404, "Image not found locally")
     return FileResponse(filepath, media_type="image/jpeg")
 
 @router.get("/")
