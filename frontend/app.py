@@ -231,7 +231,7 @@ with tab_create:
             uploaded_files[i] = st.file_uploader(f"Uploader Image {i+1}", type=['jpg', 'png', 'jpeg'], key=f"file_{i}")
             
             if uploaded_files[i]:
-                st.image(uploaded_files[i], use_container_width=True)
+                img_placeholder = st.empty()
                 contexts[i] = st.text_area(f"Contexte {i+1}", key=f"context_{i}", height=70, placeholder="Décrivez cette image...")
                 
                 # Crop options UI
@@ -241,6 +241,18 @@ with tab_create:
                     sx, sy = st.columns(2)
                     crop_x[i] = sx.slider("Focus Horizontal %", 0, 100, 50, key=f"cx_{i}")
                     crop_y[i] = sy.slider("Focus Vertical %", 0, 100, 50, key=f"cy_{i}")
+
+                # Live Preview
+                try:
+                    cropped_b64 = crop_image_for_ai(
+                        uploaded_files[i], 
+                        crop_selections[i], 
+                        {"x": crop_x[i], "y": crop_y[i]}
+                    )
+                    cropped_bytes = base64.b64decode(cropped_b64)
+                    img_placeholder.image(cropped_bytes, use_container_width=True)
+                except Exception as e:
+                    img_placeholder.image(uploaded_files[i], use_container_width=True)
 
                 st.caption("✅ Prêt")
             else:
