@@ -265,11 +265,11 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                     </DndContext>
 
                     {/* Actions */}
-                    <div className="flex gap-2 pt-3 border-t border-gray-800">
+                    <div className="flex justify-end gap-2 pt-3 border-t border-gray-800">
                         <button
                             onClick={handleSave}
                             disabled={!isDirty || isSaving}
-                            className={`flex-1 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${isDirty && !isSaving
+                            className={`px-6 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${isDirty && !isSaving
                                 ? 'outline outline-emerald-500/50 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
                                 : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
                                 }`}
@@ -280,7 +280,7 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                         <button
                             onClick={() => onPost(draft.id)}
                             disabled={isPosting}
-                            className={`flex-1 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${isPosting
+                            className={`px-6 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${isPosting
                                 ? 'bg-gray-700 text-gray-400'
                                 : draft.status === 'posted'
                                     ? 'bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-500/20'
