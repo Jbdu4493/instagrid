@@ -7,6 +7,12 @@ import { CSS } from '@dnd-kit/utilities';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+const getFullImageUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 const CROP_OPTIONS = [
     { value: 'original', label: 'Original' },
     { value: '1:1', label: '1:1' },
@@ -211,7 +217,7 @@ function DraftCard({ draft, isExpanded, onToggleExpand, onUpdate, onDelete, onPo
                             {draft.posts.map((post, idx) => (
                                 <img
                                     key={idx}
-                                    src={post.image_url}
+                                    src={getFullImageUrl(post.image_url)}
                                     alt=""
                                     className="w-8 h-8 object-cover rounded"
                                 />
@@ -383,7 +389,7 @@ function DraftPostEditor({ post, idx, draft, onMarkDirty, onMove, allDrafts, set
                 style={isOriginal ? {} : { aspectRatio: ASPECT_CSS[cropRatio] }}
             >
                 <img
-                    src={post.image_url}
+                    src={getFullImageUrl(post.image_url)}
                     alt={`Draft ${draft.id} - ${idx}`}
                     className={`w-full h-full ${isOriginal ? 'object-contain' : 'object-cover'}`}
                     style={isOriginal ? {} : { objectPosition: `${cropPosition.x}% ${cropPosition.y}%` }}
@@ -468,7 +474,10 @@ function DraftPostEditor({ post, idx, draft, onMarkDirty, onMove, allDrafts, set
                     try {
                         let imgB64 = "";
                         try {
-                            const url = post.image_url.startsWith('http') ? post.image_url : `${API_URL}/image/${post.image_key.split('/').pop()}`;
+                            // Always fetch via backend proxy to avoid S3 CORS issues on client-side
+                            const filename = post.image_key ? post.image_key.split('/').pop() : post.image_url.split('/').pop();
+                            const url = `${API_URL}/drafts/image/${filename}`;
+
                             const res = await axios.get(url, { responseType: 'blob' });
                             const reader = new FileReader();
                             const b64Promise = new Promise(resolve => {
@@ -478,6 +487,7 @@ function DraftPostEditor({ post, idx, draft, onMarkDirty, onMove, allDrafts, set
                             const b64DataUrl = await b64Promise;
                             imgB64 = b64DataUrl.split(',')[1];
                         } catch (e) {
+                            console.error("Image fetch error:", e);
                             alert("Impossible de récupérer l'image pour la régénération.");
                             setIsRegenerating(false);
                             return;

@@ -144,7 +144,7 @@ with tab_drafts:
                             with cols[idx]:
                                 img_url = p.get('image_url', '')
                                 if not img_url.startswith("http"):
-                                    img_url = f"{API_URL}/image/{p.get('image_key')}"
+                                    img_url = f"{API_URL}{img_url}" if img_url.startswith('/') else f"{API_URL}/{img_url}"
                                 st.image(img_url, use_container_width=True)
                                 
                                 c_arrow_ld, c_arrow_rd = st.columns(2)
