@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 from openai import OpenAI
 import boto3
@@ -12,6 +13,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Ensure we can import new back-end packages
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from services.storage import StorageService, S3Storage, TmpfilesStorage
+from security.token_manager import TokenManager
+
 # Global Configurations
 FB_APP_ID = os.environ.get("FB_APP_ID")
 FB_APP_SECRET = os.environ.get("FB_APP_SECRET")
@@ -20,7 +27,7 @@ IG_USER_ID = os.environ.get("IG_USER_ID", "")
 # Initialize OpenAI Client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Initialize S3 Client (optional — falls back to tmpfiles.org if not configured)
+# Initialize S3 Client & Storage Strategy
 USE_S3 = bool(os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"))
 s3_client = None
 S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "")
@@ -35,8 +42,10 @@ if USE_S3:
     )
     S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "instagrid")
     logger.info(f"S3 configured: bucket={S3_BUCKET}")
+    storage_service = StorageService(S3Storage(s3_client, S3_BUCKET))
 else:
-    logger.info("No AWS credentials — using tmpfiles.org as fallback")
+    logger.info("No AWS credentials — using tmpfiles.org as fallback storage")
+    storage_service = StorageService(TmpfilesStorage())
 
 # Initialize Draft Store
 if USE_S3:
@@ -46,5 +55,5 @@ else:
     draft_store = LocalDraftStore("data/drafts")
     logger.info("DraftStore: Local (data/drafts/)")
 
-TOKEN_FILE = "data/token.json"
 os.makedirs("data", exist_ok=True)
+

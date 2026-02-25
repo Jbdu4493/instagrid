@@ -3,7 +3,7 @@ import os
 import requests
 from config import logger, FB_APP_ID, FB_APP_SECRET, IG_USER_ID
 from models import TokenExchangeRequest
-from utils import save_token
+from security.token_manager import TokenManager
 
 router = APIRouter()
 
@@ -87,7 +87,7 @@ async def exchange_token(request: TokenExchangeRequest):
     
     # Fallback response helper
     def return_long_lived(msg_suffix: str):
-        save_token(long_lived_token, "long_lived_user", {"expires_in_days": expires_in_days})
+        TokenManager.save_token(long_lived_token, "long_lived_user", {"expires_in_days": expires_in_days})
         return {
             "status": "success",
             "token_type": "long_lived_user",
@@ -111,7 +111,7 @@ async def exchange_token(request: TokenExchangeRequest):
     if best_page:
         # Success: Permanent page token!
         permanent_token = best_page["token"]
-        save_token(permanent_token, "permanent_page", {"page_name": best_page["name"]})
+        TokenManager.save_token(permanent_token, "permanent_page", {"page_name": best_page["name"]})
         logger.info(f"Permanent Page token set for page '{best_page['name']}'!")
         return {
             "status": "success",
@@ -124,7 +124,7 @@ async def exchange_token(request: TokenExchangeRequest):
         # No matching IG page, fallback to first available page
         first_page = pages[0]
         page_token = first_page.get("access_token")
-        save_token(page_token, "page_token", {"page_name": first_page.get("name")})
+        TokenManager.save_token(page_token, "page_token", {"page_name": first_page.get("name")})
         return {
             "status": "success",
             "token_type": "page_token",

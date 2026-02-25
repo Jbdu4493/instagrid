@@ -5,9 +5,9 @@ import os
 import time
 import base64
 import requests
-from config import logger, draft_store, USE_S3, s3_client, S3_BUCKET, IG_USER_ID
+from config import logger, draft_store, USE_S3, s3_client, S3_BUCKET, IG_USER_ID, storage_service
 from models import SaveDraftRequest, UpdateDraftRequest, PostDraftRequest
-from utils import compress_image, crop_image, upload_image
+from services.image_processor import compress_image, crop_image, ImageProcessingError
 
 router = APIRouter()
 
@@ -164,12 +164,20 @@ async def post_draft(draft_id: str, request: PostDraftRequest):
             # 2. Apply crop + compression
             crop_ratio = post.get("crop_ratio", "original")
             crop_position = post.get("crop_position", {"x": 50, "y": 50})
-            image_bytes = crop_image(image_bytes, crop_ratio, crop_position)
-            image_bytes = compress_image(image_bytes)
+            
+            try:
+                image_bytes = crop_image(image_bytes, crop_ratio, crop_position)
+                image_bytes = compress_image(image_bytes)
+            except ImageProcessingError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+                
             logger.info(f"Prepared {position_name}: crop={crop_ratio}")
 
             # 3. Upload processed image online for Instagram to fetch
-            image_url = upload_image(image_bytes, f"temp/draft_{draft_id}_{idx}.jpg")
+            try:
+                image_url = storage_service.upload_image(image_bytes, f"temp/draft_{draft_id}_{idx}.jpg")
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"Storage Erreur: {e}")
 
             # 4. Talk with Graph API to publish
             post_id = _process_instagram_publication(user_id, token, image_url, post["caption"])

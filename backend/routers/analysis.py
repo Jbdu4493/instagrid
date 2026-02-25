@@ -4,19 +4,23 @@ import base64
 import yaml
 from config import client, logger
 from models import AnalysisResponse, RegenerateRequest, RegenerateResponse, RegenerateResponseParts
-from utils import compress_image
+from services.image_processor import compress_image, ImageProcessingError
 
 router = APIRouter()
 
 async def _process_uploaded_images(files: List[UploadFile]) -> List[str]:
     """Compresses and encodes uploaded images to base64."""
-    encoded_images = []
+    processed_images = []
     for file in files:
         content = await file.read()
-        compressed_content = compress_image(content, max_size_kb=800)
-        encoded_images.append(base64.b64encode(compressed_content).decode('utf-8'))
-        await file.seek(0)
-    return encoded_images
+        try:
+            image_bytes = compress_image(content, max_size_kb=800)
+            base64_img = base64.b64encode(image_bytes).decode('utf-8')
+            processed_images.append(base64_img)
+        except ImageProcessingError as e:
+            logger.error(f"Failed to process image {file.filename}: {e}")
+            raise HTTPException(status_code=400, detail=str(e))
+    return processed_images
 
 def _load_analysis_prompt(user_context: str, context_0: str, context_1: str, context_2: str) -> str:
     """Loads and formats the system prompt from YAML."""
@@ -92,7 +96,7 @@ def _call_openai_analysis(messages: List[dict]) -> AnalysisResponse:
 async def analyze_images(
     files: List[UploadFile] = File(...),
     user_context: str = Form(None),
-    context_0: str = Form(None),
+    context_0: str = Form(None), 
     context_1: str = Form(None),
     context_2: str = Form(None)
 ):

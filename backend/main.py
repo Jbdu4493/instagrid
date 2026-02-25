@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import logger
-from utils import load_saved_token
+from security.token_manager import TokenManager
 from routers import auth, analysis, instagram, drafts
 
 app = FastAPI(title="InstaGrid AI Backend")
@@ -28,8 +28,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load persisted token on startup
-load_saved_token()
+# Load specific saved token to memory
+loaded = TokenManager.load_saved_token()
+if loaded:
+    pass # Placeholder for potential future logging or action
 
 # --- Endpoints ---
 @app.get("/")

@@ -3,9 +3,9 @@ import os
 import time
 import base64
 import requests
-from config import logger, USE_S3, IG_USER_ID
+from config import logger, USE_S3, IG_USER_ID, storage_service
 from models import PostRequest
-from utils import compress_image, upload_image
+from services.image_processor import compress_image, ImageProcessingError
 router = APIRouter()
 
 FACEBOOK_API_URL = "https://graph.facebook.com/v19.0"
@@ -44,14 +44,20 @@ async def post_to_grid(request: PostRequest):
         position_name = ["Right", "Middle", "Left"][idx]
         
         try:
-            # 1. Prepare image (compress & convert to JPEG)
+            # 1. Prepare image
             image_bytes = base64.b64decode(post.image_base64)
-            image_bytes = compress_image(image_bytes)
+            try:
+                image_bytes = compress_image(image_bytes)
+            except ImageProcessingError as e:
+                raise HTTPException(status_code=400, detail=f"Image illisible pour {position_name}: {e}")
             
-            # 2. Upload image (S3 or tmpfiles.org)
+            # 2. Upload image via Strategy Pattern (S3 or tmpfiles.org)
             s3_key = f"temp/post_{timestamp}_{idx}.jpg"
-            logger.info(f"Uploading {position_name} via {hosting}...")
-            public_url = upload_image(image_bytes, s3_key)
+            logger.info(f"Uploading {position_name} via le service de stockage...")
+            try:
+                public_url = storage_service.upload_image(image_bytes, s3_key)
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"Erreur de stockage: {e}")
             
             logger.info(f"Posting {position_name} via Graph API.")
             
