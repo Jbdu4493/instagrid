@@ -27,7 +27,7 @@ async def get_draft_image(filename: str):
         # fallback to local just in case? Or we trust draft_store.get_raw_image_bytes which works locally too.
         raise HTTPException(404, "Image not found")
 
-@router.get("/")
+@router.get("")
 async def list_drafts():
     """List all saved drafts."""
     drafts = draft_store.list_drafts()
@@ -37,7 +37,7 @@ async def list_drafts():
             post["image_url"] = draft_store.get_image_url(post["image_key"])
     return {"drafts": drafts}
 
-@router.post("/")
+@router.post("")
 async def save_draft(request: SaveDraftRequest):
     """Save a new draft (3 images + captions). Images stored RAW — no compression."""
     if len(request.posts) != 3:
