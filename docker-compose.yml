@@ -30,7 +30,16 @@ services:
     env_file:
       - .env
     environment:
-      - API_URL=http://backend:8000
+      - API_URL=${API_URL:-http://backend:8000}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - IG_USER_ID=${IG_USER_ID:-}
+      - IG_ACCESS_TOKEN=${IG_ACCESS_TOKEN:-}
+      - FB_APP_ID=${FB_APP_ID:-}
+      - FB_APP_SECRET=${FB_APP_SECRET:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
+      - AWS_S3_REGION=${AWS_S3_REGION:-}
     depends_on:
       - backend
     restart: always
