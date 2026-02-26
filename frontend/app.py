@@ -9,7 +9,41 @@ import time
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 st.set_page_config(page_title="InstaGrid AI", page_icon="favicon.svg", layout="wide")
 
+# --- Security: App Password Gateway ---
+if 'app_password' not in st.session_state:
+    st.session_state.app_password = None
 
+if not st.session_state.app_password:
+    col_s1, col_s2, col_s3 = st.columns([1, 2, 1])
+    with col_s2:
+        st.markdown("<h2 style='text-align: center;'>🔒 Accès Restreint</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>Veuillez saisir le mot de passe de l'application.</p>", unsafe_allow_html=True)
+        pwd = st.text_input("Mot de passe", type="password", label_visibility="collapsed", placeholder="••••••••••••")
+        if st.button("Déverrouiller", use_container_width=True, type="primary"):
+            if pwd:
+                with st.spinner("Vérification..."):
+                    try:
+                        r = requests.get(f"{API_URL}/verify-password", headers={"X-App-Password": pwd})
+                        if r.status_code == 200 and r.json().get("valid"):
+                            st.session_state.app_password = pwd
+                            st.rerun()
+                        elif r.status_code == 401:
+                            st.error("Mot de passe incorrect.")
+                        else:
+                            st.error(f"Erreur du serveur d'authentification ({r.status_code})")
+                    except Exception as e:
+                        st.error(f"Impossible de contacter le serveur : {e}")
+    st.stop()
+
+# --- Authenticated HTTP Session ---
+def get_api_session():
+    if 'api_session' not in st.session_state:
+        s = requests.Session()
+        s.headers.update({"X-App-Password": st.session_state.app_password})
+        st.session_state.api_session = s
+    return st.session_state.api_session
+
+api = get_api_session()
 
 # --- Header ---
 col1, col2 = st.columns([1, 8])
@@ -58,17 +92,16 @@ def crop_image_for_ai(file, ratio_str, position):
     cropped.save(buf, format="JPEG", quality=92)
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-@st.cache_data(ttl=60)
-def fetch_config():
+def fetch_config(password):
     try:
-        r = requests.get(f"{API_URL}/config")
+        r = requests.get(f"{API_URL}/config", headers={"X-App-Password": password})
         if r.status_code == 200:
             return r.json()
     except Exception:
         return {}
     return {}
 
-config_data = fetch_config()
+config_data = fetch_config(st.session_state.app_password)
 
 # --- Session State Management ---
 if 'ig_user_id' not in st.session_state:
@@ -110,13 +143,12 @@ with tab_settings:
         else:
             with st.spinner("Échange en cours avec Facebook Graph API..."):
                 try:
-                    res = requests.post(f"{API_URL}/exchange-token", json={"short_lived_token": st.session_state.access_token})
+                    res = api.post(f"{API_URL}/exchange-token", json={"short_lived_token": st.session_state.access_token})
                     if res.status_code == 200:
                         data = res.json()
                         st.success(data.get("message", "Token étendu avec succès !"))
                         if data.get("access_token"):
                             st.session_state.access_token = data["access_token"]
-                            fetch_config.clear() # Clear cache to load new token
                     else:
                         st.error(f"Erreur d'échange: {res.text}")
                 except Exception as e:
@@ -131,7 +163,7 @@ with tab_drafts:
         st.rerun()
         
     try:
-        drafts_res = requests.get(f"{API_URL}/drafts")
+        drafts_res = api.get(f"{API_URL}/drafts")
         if drafts_res.status_code == 200:
             drafts = drafts_res.json().get("drafts", [])
             if not drafts:
@@ -152,13 +184,13 @@ with tab_drafts:
                                     if idx > 0 and st.button("◀️ Déplacer", key=f"d_left_{d['id']}_{idx}"):
                                         order = [0, 1, 2]
                                         order[idx], order[idx-1] = order[idx-1], order[idx]
-                                        requests.put(f"{API_URL}/drafts/{d['id']}", json={"post_order": order})
+                                        api.put(f"{API_URL}/drafts/{d['id']}", json={"post_order": order})
                                         st.rerun()
                                 with c_arrow_rd:
                                     if idx < 2 and st.button("Déplacer ▶️", key=f"d_right_{d['id']}_{idx}"):
                                         order = [0, 1, 2]
                                         order[idx], order[idx+1] = order[idx+1], order[idx]
-                                        requests.put(f"{API_URL}/drafts/{d['id']}", json={"post_order": order})
+                                        api.put(f"{API_URL}/drafts/{d['id']}", json={"post_order": order})
                                         st.rerun()
                                         
                                 new_cap = st.text_area("Légende", p.get('caption', ''), key=f"draft_{d['id']}_cap_{idx}", height=100)
@@ -168,19 +200,20 @@ with tab_drafts:
                                     with st.spinner("Régénération..."):
                                         try:
                                             # Fetch image bytes to send base64
-                                            img_res = requests.get(img_url if img_url.startswith("http") else f"http://localhost:8000/drafts/image/{p.get('image_key').split('/')[-1]}")
+                                            img_res = api.get(img_url if img_url.startswith("http") else f"http://localhost:8000/drafts/image/{p.get('image_key').split('/')[-1]}")
                                             img_b64 = base64.b64encode(img_res.content).decode('utf-8')
                                             payload = {
                                                 "image_base64": img_b64,
                                                 "captions_history": [p.get('caption', '')]
                                             }
-                                            reg_res = requests.post(f"{API_URL}/regenerate_caption", json=payload)
+                                            reg_res = api.post(f"{API_URL}/regenerate_caption", json=payload)
                                             if reg_res.status_code == 200:
                                                 new_text = reg_res.json()["caption"]
                                                 # Save immediately to draft
                                                 current_captions = [pt.get('caption', '') for pt in d['posts']]
                                                 current_captions[idx] = new_text
                                                 requests.put(f"{API_URL}/drafts/{d['id']}", json={"captions": current_captions})
+                                                api.put(f"{API_URL}/drafts/{d['id']}", json={"captions": current_captions})
                                                 st.success("Régénéré !")
                                                 time.sleep(1)
                                                 st.rerun()
@@ -193,7 +226,7 @@ with tab_drafts:
                         with col_action0:
                             if st.button("💾 Mettre à jour", key=f"update_{d['id']}"):
                                 new_captions = [p.get('new_caption', p.get('caption', '')) for p in d['posts']]
-                                update_res = requests.put(f"{API_URL}/drafts/{d['id']}", json={"captions": new_captions})
+                                update_res = api.put(f"{API_URL}/drafts/{d['id']}", json={"captions": new_captions})
                                 if update_res.status_code == 200:
                                     st.success("Modifications enregistrées.")
                                     time.sleep(1)
@@ -206,7 +239,7 @@ with tab_drafts:
                                     st.error("Renseignez l'ID Utilisateur et le Token dans les Paramètres.")
                                 else:
                                     with st.spinner("Publication du brouillon..."):
-                                        post_res = requests.post(f"{API_URL}/drafts/{d['id']}/post", json={
+                                        post_res = api.post(f"{API_URL}/drafts/{d['id']}/post", json={
                                             "access_token": st.session_state.access_token,
                                             "ig_user_id": st.session_state.ig_user_id,
                                             "force": False
@@ -217,7 +250,7 @@ with tab_drafts:
                                             st.error(f"Erreur : {post_res.text}")
                         with col_action2:
                             if st.button("🗑️ Supprimer", key=f"del_{d['id']}"):
-                                del_res = requests.delete(f"{API_URL}/drafts/{d['id']}")
+                                del_res = api.delete(f"{API_URL}/drafts/{d['id']}")
                                 if del_res.status_code == 200:
                                     st.warning("Brouillon supprimé.")
                                     st.rerun()
@@ -234,7 +267,7 @@ with tab_create:
     if st.session_state.ig_user_id and st.session_state.access_token:
         with st.expander("👁️ Afficher la Grille Instagram Actuelle"):
             try:
-                res = requests.get(f"{API_URL}/ig-posts?ig_user_id={st.session_state.ig_user_id}&access_token={st.session_state.access_token}")
+                res = api.get(f"{API_URL}/ig-posts?ig_user_id={st.session_state.ig_user_id}&access_token={st.session_state.access_token}")
                 if res.status_code == 200:
                     recent_posts = res.json().get("posts", [])
                     if recent_posts:
@@ -329,7 +362,7 @@ with tab_create:
                         "context_2": contexts[2]
                     }
                     
-                    response = requests.post(f"{API_URL}/analyze", files=files_for_api, data=data)
+                    response = api.post(f"{API_URL}/analyze", files=files_for_api, data=data)
                     
                     if response.status_code == 200:
                         res = response.json()
@@ -397,7 +430,7 @@ with tab_create:
                                 "common_thread_fr": th_fr,
                                 "common_thread_en": th_en
                             }
-                            reg_res = requests.post(f"{API_URL}/regenerate_caption", json=payload)
+                            reg_res = api.post(f"{API_URL}/regenerate_caption", json=payload)
                             if reg_res.status_code == 200:
                                 new_text = reg_res.json()["caption"]
                                 post["history"].append(new_text)
@@ -451,7 +484,7 @@ with tab_create:
                 positions = [p['crop_pos'] for p in st.session_state.posts]
                 
                 try:
-                    save_res = requests.post(f"{API_URL}/drafts", json={
+                    save_res = api.post(f"{API_URL}/drafts", json={
                         "posts": post_payload_list,
                         "crop_ratios": ratios,
                         "crop_positions": positions
@@ -478,7 +511,7 @@ with tab_create:
                                 "access_token": st.session_state.access_token,
                                 "posts": post_payload_list
                             }
-                            post_res = requests.post(f"{API_URL}/post", json=req_body)
+                            post_res = api.post(f"{API_URL}/post", json=req_body)
                             if post_res.status_code == 200:
                                 st.balloons()
                                 data = post_res.json()
