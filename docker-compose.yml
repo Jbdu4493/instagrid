@@ -17,6 +17,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
       - AWS_S3_REGION=${AWS_S3_REGION:-}
+      - APP_PASSWORD=${APP_PASSWORD:-}
     volumes:
       - ./backend/data:/app/data
     restart: always
@@ -40,6 +41,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
       - AWS_S3_REGION=${AWS_S3_REGION:-}
+      - APP_PASSWORD=${APP_PASSWORD:-}
     depends_on:
       - backend
     restart: always
@@ -56,6 +58,7 @@ services:
       - .env
     environment:
       - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+      - APP_PASSWORD=${APP_PASSWORD:-}
     depends_on:
       - backend
     restart: always
