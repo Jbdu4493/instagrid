@@ -30,6 +30,7 @@ Résultat : une ligne de 3 photos parfaitement agencées sur votre profil, avec 
 - **Grille Instagram en direct** — Visualisez vos 12 derniers posts Instagram directement dans l'interface pour planifier votre feed.
 - **Paramètres & Token permanent** — Onglet dédié pour la gestion du token (échange automatique 1h → ∞).
 - **Double hébergement** — AWS S3 (recommandé) ou tmpfiles.org (fallback) pour stocker les images des brouillons en haute qualité.
+- **🔒 Sécurité Avancée** — Accès restreint par mot de passe global (`APP_PASSWORD`) pour protéger l'application des accès publics non autorisés.
 
 ---
 
@@ -51,6 +52,7 @@ IG_USER_ID=17841401830960721
 IG_ACCESS_TOKEN=EAAB...
 FB_APP_ID=926109429872957
 FB_APP_SECRET=xxxxx
+APP_PASSWORD=votre_mot_de_passe_securise
 ```
 
 > 📖 Pas encore de token Instagram ? Suivez le guide **[SETUP_FACEBOOK_APP.md](SETUP_FACEBOOK_APP.md)**
@@ -141,6 +143,7 @@ docker-compose up -d --build
 | `AWS_S3_BUCKET` | ⚠️ | Nom du bucket S3 |
 | `AWS_S3_REGION` | ⚠️ | Région AWS (défaut: `eu-west-3`) |
 | `VITE_API_URL` | 🌍 | URL de l'API Backend (pour le front React, ex: `http://api.mon-domaine.com`). Injectée dynamiquement au runtime sur des plateformes comme Dokploy. |
+| `APP_PASSWORD` | 🔒 | Mot de passe unique pour accéder à l'interface (React/Streamlit) et débloquer les APIs du backend. |
 
 > [!WARNING]
 > **Il est fortement recommandé d’utiliser AWS S3** pour l’hébergement des images. Le fallback `tmpfiles.org` fonctionne mais est un service tiers gratuit sans garantie de disponibilité ni de fiabilité. Pour un usage en production, S3 est bien plus stable et rapide.
