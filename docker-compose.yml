@@ -4,7 +4,7 @@ services:
       context: ./backend
     container_name: instagrid-backend
     ports:
-      - "8001:8000"
+      - "8000:8000"
     env_file:
       - .env
     volumes:
@@ -16,7 +16,7 @@ services:
       context: ./frontend
     container_name: instagrid-frontend
     ports:
-      - "8503:8501"
+      - "8501:8501"
     env_file:
       - .env
     environment:
@@ -29,10 +29,10 @@ services:
     build:
       context: ./frontend-react
       args:
-        VITE_API_URL: http://localhost:8001
+        VITE_API_URL: http://localhost:8000
     container_name: instagrid-react
     ports:
-      - "3001:80"
+      - "3000:3000"
     depends_on:
       - backend
     restart: always
