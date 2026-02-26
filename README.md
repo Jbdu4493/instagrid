@@ -65,9 +65,9 @@ docker-compose up -d --build
 
 | Service | URL |
 |---------|-----|
-| **React UI** | [http://localhost:3000](http://localhost:3000) |
-| **API Backend** | [http://localhost:8001](http://localhost:8001) |
-| **Streamlit** (legacy) | [http://localhost:8503](http://localhost:8503) |
+| **React UI** | [http://localhost:3001](http://localhost:3001) |
+| **API Backend** | [http://localhost:8000](http://localhost:8000) |
+| **Streamlit** (legacy) | [http://localhost:8501](http://localhost:8501) |
 
 ---
 
@@ -90,7 +90,7 @@ docker-compose up -d --build
 ```
 ┌──────────────────┐     ┌──────────────────┐
 │   React Frontend │────▶│  FastAPI Backend  │
-│   (port 3000)    │     │   (port 8001)     │
+│   (port 3001)    │     │   (port 8000)     │
 └──────────────────┘     └────────┬─────────┘
                                   │
                     ┌─────────────┼─────────────┐
@@ -140,6 +140,7 @@ docker-compose up -d --build
 | `AWS_SECRET_ACCESS_KEY` | ⚠️ | Secret AWS |
 | `AWS_S3_BUCKET` | ⚠️ | Nom du bucket S3 |
 | `AWS_S3_REGION` | ⚠️ | Région AWS (défaut: `eu-west-3`) |
+| `VITE_API_URL` | 🌍 | URL de l'API Backend (pour le front React, ex: `http://api.mon-domaine.com`). Injectée dynamiquement au runtime sur des plateformes comme Dokploy. |
 
 > [!WARNING]
 > **Il est fortement recommandé d’utiliser AWS S3** pour l’hébergement des images. Le fallback `tmpfiles.org` fonctionne mais est un service tiers gratuit sans garantie de disponibilité ni de fiabilité. Pour un usage en production, S3 est bien plus stable et rapide.

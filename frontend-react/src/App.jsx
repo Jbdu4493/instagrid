@@ -6,7 +6,7 @@ import GridEditor from './components/GridEditor';
 import StrategyPanel from './components/StrategyPanel';
 import DraftsPanel from './components/DraftsPanel';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = (window._env_ && window._env_.VITE_API_URL) || import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const CROP_OPTIONS = [
   { value: 'original', label: 'Original' },
