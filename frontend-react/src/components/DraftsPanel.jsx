@@ -5,7 +5,10 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const API_URL = (window._env_ && window._env_.VITE_API_URL) || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+let API_URL = (window._env_ && window._env_.VITE_API_URL) || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+if (API_URL && !API_URL.startsWith('http')) {
+    API_URL = `https://${API_URL}`;
+}
 
 const getFullImageUrl = (url) => {
     if (!url) return '';
