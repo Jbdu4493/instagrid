@@ -29,12 +29,14 @@ services:
     build:
       context: ./frontend-react
       args:
-        VITE_API_URL: http://localhost:8000
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     container_name: instagrid-react
     ports:
       - "3001:3001"
     env_file:
       - .env
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
     depends_on:
       - backend
     restart: always
