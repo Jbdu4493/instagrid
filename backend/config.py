@@ -24,6 +24,7 @@ from security.token_manager import TokenManager
 FB_APP_ID = os.environ.get("FB_APP_ID")
 FB_APP_SECRET = os.environ.get("FB_APP_SECRET")
 IG_USER_ID = os.environ.get("IG_USER_ID", "")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "secret")
 
 # Instagram Graph API Service
 FACEBOOK_API_URL = "https://graph.facebook.com/v19.0"

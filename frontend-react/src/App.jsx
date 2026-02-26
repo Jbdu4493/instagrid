@@ -5,6 +5,7 @@ import UploadSection from './components/UploadSection';
 import GridEditor from './components/GridEditor';
 import StrategyPanel from './components/StrategyPanel';
 import DraftsPanel from './components/DraftsPanel';
+import Login from './components/Login';
 
 let API_URL = (window._env_ && window._env_.VITE_API_URL) || import.meta.env.VITE_API_URL || 'http://localhost:8000';
 if (API_URL && !API_URL.startsWith('http')) {
@@ -26,6 +27,8 @@ const ASPECT_CSS = {
 };
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   // Tab navigation
   const [activeTab, setActiveTab] = useState('create');
   // State for Upload Phase
@@ -63,6 +66,13 @@ function App() {
 
   // Fetch Config
   useEffect(() => {
+    // 1. Check local storage for existing session
+    const savedPassword = localStorage.getItem('app_password');
+    if (savedPassword) {
+      applyAxiosInterceptor(savedPassword);
+      setIsAuthenticated(true);
+    }
+
     async function fetchConfig() {
       try {
         const res = await axios.get(`${API_URL}/config`);
@@ -73,9 +83,42 @@ function App() {
         console.error("Failed to load config", e);
       }
     }
-    fetchConfig();
-    fetchDrafts();
-  }, []);
+
+    if (isAuthenticated) {
+      fetchConfig();
+      fetchDrafts();
+    }
+  }, [isAuthenticated]);
+
+  const applyAxiosInterceptor = (password) => {
+    // Inject the password header into every single request
+    axios.defaults.headers.common['X-App-Password'] = password;
+
+    // Handle 401 globally (e.g. if the backend password was changed)
+    axios.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.response?.status === 401) {
+          handleLogout();
+        }
+        return Promise.reject(error);
+      }
+    );
+  };
+
+  const handleLoginSuccess = (password) => {
+    localStorage.setItem('app_password', password);
+    applyAxiosInterceptor(password);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('app_password');
+    delete axios.defaults.headers.common['X-App-Password'];
+    setIsAuthenticated(false);
+    setAccessToken('');
+    setIgUserId('');
+  };
 
   useEffect(() => {
     if (igUserId && accessToken) {
@@ -428,6 +471,10 @@ function App() {
   };
 
 
+  if (!isAuthenticated) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen bg-dark text-white p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-12">
@@ -553,6 +600,16 @@ function App() {
                 )}
               </div>
             )}
+
+            {/* Logout Section */}
+            <div className="border-t border-gray-800 pt-6 mt-6">
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-all flex items-center gap-2"
+              >
+                Déconnexion Sécurisée
+              </button>
+            </div>
           </section>
         )}
 
