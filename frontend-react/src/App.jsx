@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Camera, Sparkles, Send, LayoutGrid, Instagram, AlertCircle, Loader2, RefreshCw, Save, Trash2, Edit3, Eye, FileText, Settings } from 'lucide-react';
+import { Upload, Camera, Sparkles, Send, LayoutGrid, Instagram, AlertCircle, Loader2, RefreshCw, Save, Trash2, Edit3, Eye, FileText, Settings, Heart, MessageCircle } from 'lucide-react';
 import UploadSection from './components/UploadSection';
 import GridEditor from './components/GridEditor';
 import StrategyPanel from './components/StrategyPanel';
@@ -653,8 +653,15 @@ function App() {
                           ) : (
                             <img src={post.media_url} alt="" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
                           )}
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Instagram className="text-white" size={24} />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-6">
+                            <div className="flex items-center gap-2 text-white font-bold text-lg drop-shadow-md">
+                              <Heart size={24} fill="currentColor" />
+                              <span>{post.like_count || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white font-bold text-lg drop-shadow-md">
+                              <MessageCircle size={24} fill="currentColor" />
+                              <span>{post.comments_count || 0}</span>
+                            </div>
                           </div>
                         </a>
                       ))}

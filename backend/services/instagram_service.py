@@ -119,7 +119,7 @@ class InstagramService:
         """
         url = f"{self.base_url}/{user_id}/media"
         params = {
-            "fields": "id,media_type,media_url,thumbnail_url,permalink,caption,timestamp",
+            "fields": "id,media_type,media_url,thumbnail_url,permalink,caption,timestamp,like_count,comments_count",
             "limit": limit,
             "access_token": token
         }
