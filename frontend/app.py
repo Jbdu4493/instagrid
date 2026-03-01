@@ -283,6 +283,7 @@ with tab_create:
                                         st.image(post.get('thumbnail_url', post.get('media_url')), use_container_width=True)
                                     else:
                                         st.image(post.get('media_url'), use_container_width=True)
+                                    st.caption(f"❤️ {post.get('like_count', 0)}  💬 {post.get('comments_count', 0)}")
                     else:
                         st.info("Aucun post récent trouvé sur ce compte.")
             except Exception as e:

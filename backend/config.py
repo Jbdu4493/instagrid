@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 from openai import OpenAI
+from google import genai
 import boto3
 from botocore.config import Config as BotoConfig
 from drafts import S3DraftStore, LocalDraftStore
@@ -32,6 +33,16 @@ instagram_service = InstagramService(FACEBOOK_API_URL)
 
 # Initialize OpenAI Client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+# Initialize Gemini Client
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+gemini_client = None
+if GEMINI_API_KEY and GEMINI_API_KEY != "votre_cle_gemini_ici" and GEMINI_API_KEY != "your_gemini_api_key":
+    try:
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+        logger.info("Gemini Client initialized successfully.")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Gemini client: {e}")
 
 # Initialize S3 Client & Storage Strategy
 USE_S3 = bool(os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"))

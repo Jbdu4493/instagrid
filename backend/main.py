@@ -9,7 +9,7 @@ from fastapi.security import APIKeyHeader
 
 from config import logger, APP_PASSWORD
 from security.token_manager import TokenManager
-from routers import auth, analysis, instagram, drafts
+from routers import auth, analysis, instagram, drafts, ai_config
 
 API_KEY_NAME = "X-App-Password"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -71,6 +71,7 @@ app.include_router(auth.router, tags=["auth"], dependencies=[Depends(verify_app_
 app.include_router(analysis.router, tags=["analysis"], dependencies=[Depends(verify_app_password)])
 app.include_router(instagram.router, tags=["instagram"], dependencies=[Depends(verify_app_password)])
 app.include_router(drafts.router, prefix="/drafts", tags=["drafts"], dependencies=[Depends(verify_app_password)])
+app.include_router(ai_config.router, tags=["ai_config"], dependencies=[Depends(verify_app_password)])
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

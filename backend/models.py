@@ -32,6 +32,7 @@ class RegenerateRequest(BaseModel):
     captions_history: List[str] = []
     common_thread_fr: Optional[str] = ""
     common_thread_en: Optional[str] = ""
+    ai_provider: Optional[str] = "openai"
 
 class RegenerateResponseParts(BaseModel):
     specific_fr: str

@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, RefreshCw, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
-function GridEditor({ posts, setPosts, onRegenerate, onHistoryNav }) {
+function GridEditor({ posts, setPosts, onRegenerate, onHistoryNav, availableAiProviders }) {
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
@@ -62,6 +62,7 @@ function GridEditor({ posts, setPosts, onRegenerate, onHistoryNav }) {
                             onCaptionChange={handleCaptionChange}
                             onRegenerate={onRegenerate}
                             onHistoryNav={onHistoryNav}
+                            availableAiProviders={availableAiProviders}
                         />
                     ))}
                 </div>
@@ -102,12 +103,20 @@ function SortableItem(props) {
     );
 }
 
-function PostCard({ post, index, onCaptionChange, onRegenerate, onHistoryNav, listeners, isOverlay }) {
+function PostCard({ post, index, onCaptionChange, onRegenerate, onHistoryNav, listeners, isOverlay, availableAiProviders }) {
     const [isRegenerating, setIsRegenerating] = React.useState(false);
+    const [selectedAi, setSelectedAi] = React.useState(availableAiProviders?.[0]?.id || 'openai');
+
+    // Update selectedAi if availableAiProviders changes and no value is set
+    React.useEffect(() => {
+        if (availableAiProviders?.length > 0 && (!selectedAi || availableAiProviders.findIndex(p => p.id === selectedAi) === -1)) {
+            setSelectedAi(availableAiProviders[0].id);
+        }
+    }, [availableAiProviders, selectedAi]);
 
     const handleRegenerateClick = async () => {
         setIsRegenerating(true);
-        await onRegenerate?.(post.id);
+        await onRegenerate?.(post.id, selectedAi);
         setIsRegenerating(false);
     };
 
@@ -200,15 +209,31 @@ function PostCard({ post, index, onCaptionChange, onRegenerate, onHistoryNav, li
                         placeholder="Write a caption..."
                     />
 
-                    {/* Regenerate Button (Absolute inside/next to textarea) */}
-                    <button
-                        onClick={handleRegenerateClick}
-                        disabled={isRegenerating}
-                        title="Regenerate this caption"
-                        className="absolute bottom-2 right-2 p-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                        {isRegenerating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    </button>
+                    {/* Regenerate Controls (Absolute inside/next to textarea) */}
+                    <div className="absolute bottom-2 right-2 flex items-center gap-2">
+                        {availableAiProviders && availableAiProviders.length > 0 && (
+                            <select
+                                value={selectedAi}
+                                onChange={(e) => setSelectedAi(e.target.value)}
+                                disabled={isRegenerating}
+                                className="bg-gray-800/80 backdrop-blur-md border border-gray-700 text-purple-300 text-[10px] font-bold py-1 px-2 pr-6 rounded focus:ring-purple-500 focus:border-purple-500 appearance-none h-8 outline-none"
+                            >
+                                {availableAiProviders.map(provider => (
+                                    <option key={provider.id} value={provider.id}>
+                                        {provider.id === 'openai' ? 'OpenAI' : 'Gemini'}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                        <button
+                            onClick={handleRegenerateClick}
+                            disabled={isRegenerating || (availableAiProviders && availableAiProviders.length === 0)}
+                            title="Regenerate this caption"
+                            className="p-2 h-8 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded transition-colors disabled:opacity-50 flex items-center justify-center"
+                        >
+                            {isRegenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from typing import List
+from typing import List, Optional
 import base64
 import yaml
 from config import client, logger
 from models import AnalysisResponse, RegenerateRequest, RegenerateResponse, RegenerateResponseParts
 from services.image_processor import compress_image, ImageProcessingError
+from services.ai_service import get_ai_generator
 
 router = APIRouter()
 
@@ -43,67 +44,21 @@ def _load_analysis_prompt(user_context: str, context_0: str, context_1: str, con
         logger.error(f"Failed to load prompts.yaml: {e}")
         raise HTTPException(500, detail="Configuration Error: Could not load prompts.")
 
-def _build_openai_messages(system_prompt: str, encoded_images: List[str]) -> List[dict]:
-    """Constructs the message payload for the OpenAI API."""
-    user_content = [
-        {"type": "text", "text": "Analyse ces 3 images pour une stratégie de grille Instagram. Le but est de créer une seule ligne cohérente de 3 photos consécutives sur le profil Instagram (la photo 3 (Droite) sera postée en premier, puis la 2 (Milieu), puis la 1 (Gauche) afin qu'elles apparaissent de gauche à droite sur le profil)."}
-    ]
-    
-    positions = ["Image 1 (Gauche)", "Image 2 (Milieu)", "Image 3 (Droite)"]
-    
-    for idx, img_base64 in enumerate(encoded_images):
-        user_content.append({
-            "type": "text",
-            "text": f"--- {positions[idx]} ---"
-        })
-        user_content.append({
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{img_base64}"
-            }
-        })
 
-    return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content}
-    ]
-
-
-def _call_openai_analysis(messages: List[dict]) -> AnalysisResponse:
-    """Calls the OpenAI API and returns the parsed AnalysisResponse."""
-    try:
-        response = client.beta.chat.completions.parse(
-            model="gpt-5-mini",
-            messages=messages,
-            response_format=AnalysisResponse
-        )
-        
-        result = response.choices[0].message.parsed
-        
-        if result.suggested_order and any(x > 2 for x in result.suggested_order):
-            logger.info(f"AI returned 1-based indices: {result.suggested_order}. Converting to 0-based.")
-            result.suggested_order = [x - 1 for x in result.suggested_order]
-            
-        return result
-
-    except Exception as e:
-        logger.error(f"OpenAI API Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"AI Analysis failed: {str(e)}")
 
 @router.post("/analyze", response_model=AnalysisResponse)
 async def analyze_images(
     files: List[UploadFile] = File(...),
-    user_context: str = Form(None),
-    context_0: str = Form(None), 
-    context_1: str = Form(None),
-    context_2: str = Form(None)
+    ai_provider: Optional[str] = Form("openai"),
+    user_context: Optional[str] = Form(None),
+    context_0: Optional[str] = Form(None), 
+    context_1: Optional[str] = Form(None),
+    context_2: Optional[str] = Form(None)
 ):
     if len(files) != 3:
         raise HTTPException(status_code=400, detail="Please upload exactly 3 images.")
 
-    logger.info("Received 3 images for analysis.")
+    logger.info(f"Received 3 images for analysis using AI Provider: {ai_provider}.")
     logger.info(f"User Context: {user_context}")
     
     # 1. Traitement des images
@@ -112,11 +67,22 @@ async def analyze_images(
     # 2. Préparation du prompt métier
     system_prompt = _load_analysis_prompt(user_context, context_0, context_1, context_2)
 
-    # 3. Construction des messages pour l'IA
-    messages = _build_openai_messages(system_prompt, encoded_images)
-
-    # 4. Appel à l'IA et formatage de la réponse
-    return _call_openai_analysis(messages)
+    # 3. Récupération du moteur IA (Strategy Pattern)
+    try:
+        ai_generator = get_ai_generator(ai_provider)
+        
+        # 4. Appel à l'IA et formatage de la réponse
+        result = ai_generator.analyze_grid(system_prompt, encoded_images)
+        
+        # Conformity check
+        if result.suggested_order and any(x > 2 for x in result.suggested_order):
+            logger.info(f"AI returned 1-based indices: {result.suggested_order}. Converting to 0-based.")
+            result.suggested_order = [x - 1 for x in result.suggested_order]
+            
+        return result
+    except Exception as e:
+        logger.error(f"AI Generator Error ({ai_provider}): {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"L'analyse IA a échoué: {str(e)}")
 
 
 @router.post("/regenerate_caption", response_model=RegenerateResponse)
@@ -145,26 +111,11 @@ async def regenerate_caption(request: RegenerateRequest):
         logger.error(f"Failed to load prompts.yaml: {e}")
         raise HTTPException(500, detail="Configuration Error")
 
-    user_content = [
-        {"type": "text", "text": "Régénère la partie spécifique de la légende."},
-        {
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{request.image_base64}"
-            }
-        }
-    ]
-
     try:
-        response = client.beta.chat.completions.parse(
-            model="gpt-5-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ],
-            response_format=RegenerateResponseParts
-        )
-        parts = response.choices[0].message.parsed
+        ai_provider = getattr(request, 'ai_provider', 'openai')
+        ai_generator = get_ai_generator(ai_provider)
+        
+        parts = ai_generator.regenerate_caption(system_prompt, request.image_base64)
         
         full_caption = (
             f"{parts.specific_fr} {request.common_thread_fr}\n\n"
@@ -174,5 +125,5 @@ async def regenerate_caption(request: RegenerateRequest):
         return RegenerateResponse(caption=full_caption)
 
     except Exception as e:
-        logger.error(f"Regeneration failed: {e}")
+        logger.error(f"Regeneration failed ({getattr(request, 'ai_provider', 'openai')}): {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Regeneration failed: {str(e)}")

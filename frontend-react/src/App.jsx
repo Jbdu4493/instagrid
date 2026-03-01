@@ -64,6 +64,11 @@ function App() {
   const [recentPosts, setRecentPosts] = useState([]);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
 
+  // AI Providers (Strategy Pattern)
+  const [availableAiProviders, setAvailableAiProviders] = useState([]);
+  const [selectedAi, setSelectedAi] = useState('openai');
+  const [isCheckingAi, setIsCheckingAi] = useState(false);
+
   // Fetch Config
   useEffect(() => {
     // 1. Check local storage for existing session
@@ -84,9 +89,27 @@ function App() {
       }
     }
 
+    async function fetchAiProviders() {
+      setIsCheckingAi(true);
+      try {
+        const res = await axios.get(`${API_URL}/ai-providers`);
+        if (res.data.providers) {
+          setAvailableAiProviders(res.data.providers);
+          if (res.data.providers.length > 0) {
+            setSelectedAi(res.data.providers[0].id);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch AI providers", e);
+      } finally {
+        setIsCheckingAi(false);
+      }
+    }
+
     if (isAuthenticated) {
       fetchConfig();
       fetchDrafts();
+      fetchAiProviders();
     }
   }, [isAuthenticated]);
 
@@ -259,6 +282,7 @@ function App() {
       const formData = new FormData();
       croppedFiles.forEach(file => formData.append('files', file));
 
+      formData.append('ai_provider', selectedAi);
       if (userContext) formData.append('user_context', userContext);
 
       individualContexts.forEach((ctx, idx) => {
@@ -297,7 +321,7 @@ function App() {
 
   // --- Caption Management ---
 
-  const handleRegenerateCaption = async (postId) => {
+  const handleRegenerateCaption = async (postId, aiProvider = 'openai') => {
     const postIndex = posts.findIndex(p => p.id === postId);
     if (postIndex === -1) return;
 
@@ -311,7 +335,8 @@ function App() {
         individual_context: individualContexts[ctxIndex],
         captions_history: post.captions,
         common_thread_fr: analysisResult?.common_thread_fr || "",
-        common_thread_en: analysisResult?.common_thread_en || ""
+        common_thread_en: analysisResult?.common_thread_en || "",
+        ai_provider: aiProvider
       };
 
       const response = await axios.post(`${API_URL}/regenerate_caption`, payload);
@@ -699,13 +724,39 @@ function App() {
                 }}
               />
 
-              <div className="flex justify-end pt-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-800">
+
+                {/* AI Provider Selector */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-400">Moteur IA :</span>
+                  {isCheckingAi ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Loader2 className="animate-spin" size={16} /> Vérification...
+                    </div>
+                  ) : availableAiProviders.length === 0 ? (
+                    <span className="text-sm text-red-400">Aucune IA disponible.</span>
+                  ) : (
+                    <select
+                      value={selectedAi}
+                      onChange={(e) => setSelectedAi(e.target.value)}
+                      className="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2.5"
+                    >
+                      {availableAiProviders.map(provider => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Generate Button */}
                 <button
                   onClick={handleGenerateStrategy}
-                  disabled={files.some(f => !f) || isAnalyzing}
+                  disabled={files.some(f => !f) || isAnalyzing || availableAiProviders.length === 0}
                   className={`
                 flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all
-                ${files.some(f => !f)
+                ${(files.some(f => !f) || availableAiProviders.length === 0)
                       ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                       : 'bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 shadow-lg hover:shadow-pink-500/25'}
               `}
@@ -734,6 +785,7 @@ function App() {
                   setPosts={setPosts}
                   onRegenerate={handleRegenerateCaption}
                   onHistoryNav={handleCaptionHistory}
+                  availableAiProviders={availableAiProviders}
                 />
               </section>
             )}
