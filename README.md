@@ -12,7 +12,7 @@ InstaGrid AI automatise tout le processus :
 
 1. **Vous uploadez 3 images** dans l’interface
 2. **L’IA analyse** les images (couleurs, composition, ambiance) et détermine l’**ordre optimal** pour un flux visuel harmonieux
-3. **L’IA génère des captions** bilingues (FR/EN) avec un fil conducteur commun entre les 3 posts
+3. **L’IA génère des captions** bilingues (FR/EN) avec un fil conducteur commun entre les 3 posts (via **OpenAI** ou **Google Gemini**)
 4. **L’IA propose des hashtags** stratégiques par pyramide (broad → niche → spécifique)
 5. **L’app publie automatiquement** les 3 posts dans le bon ordre sur Instagram via le Graph API
 
@@ -23,7 +23,8 @@ Résultat : une ligne de 3 photos parfaitement agencées sur votre profil, avec 
 ## ✨ Fonctionnalités
 
 - **Analyse visuelle IA** — Détecte le meilleur ordre de publication pour un flux visuel cohérent
-- **Captions bilingues FR/EN** — Générées par GPT-5-mini, avec fil conducteur commun
+- **Support Multi-IA** — Choisissez dynamiquement entre GPT-4o-mini (OpenAI) et Gemini Flash (Google) pour analyser la grille ou regénérer vos légendes individuelles.
+- **Captions bilingues FR/EN** — Sélecteur d'IA pour génération avec fil conducteur commun
 - **Hashtags stratégiques** — Pyramide broad → niche → spécifique
 - **Publication auto** — Poste les 3 images directement sur Instagram dans le bon ordre
 - **💾 Brouillons Avancés** — Sauvegardez vos grilles. Modifiez le recadrage (Crop), l'ordre des images (Drag-and-Drop) et les légendes à tout moment avant publication.
@@ -98,9 +99,10 @@ docker-compose up -d --build
                     ┌─────────────┼─────────────┐
                     ▼             ▼              ▼
               ┌──────────┐ ┌──────────┐  ┌────────────┐
-              │ OpenAI   │ │  AWS S3  │  │ Instagram  │
-              │ GPT-5    │ │ (ou tmp) │  │ Graph API  │
-              └──────────┘ └──────────┘  └────────────┘
+              │ Multi-IA │ │  AWS S3  │  │ Instagram  │
+              │ OpenAI/  │ │ (ou tmp) │  │ Graph API  │
+              │ Gemini   │ └──────────┘  └────────────┘
+              └──────────┘
 ```
 
 ---
@@ -133,7 +135,8 @@ docker-compose up -d --build
 
 | Variable | Requis | Description |
 |----------|--------|-------------|
-| `OPENAI_API_KEY` | ✅ | Clé API OpenAI (GPT-5-mini) |
+| `OPENAI_API_KEY` | 🤖 | Clé API OpenAI (Option 1) |
+| `GEMINI_API_KEY` | 🤖 | Clé API Google Gemini (Option 2) |
 | `IG_USER_ID` | ✅ | ID du compte Instagram Business |
 | `IG_ACCESS_TOKEN` | ✅ | Token d'accès Instagram |
 | `FB_APP_ID` | 📌 | ID de l'App Facebook (pour token permanent) |
@@ -164,6 +167,7 @@ Le token permanent est sauvegardé dans `backend/data/token.json` et rechargé a
 
 ## 📖 Documentation
 
+- **[SETUP_AI_KEYS.md](SETUP_AI_KEYS.md)** — Tutoriel détaillé pour créer et configurer vos clés API (OpenAI et Google Gemini)
 - **[SETUP_FACEBOOK_APP.md](SETUP_FACEBOOK_APP.md)** — Guide pas à pas pour créer une App Facebook et obtenir un token Instagram
 
 ---

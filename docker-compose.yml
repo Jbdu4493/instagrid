@@ -9,6 +9,7 @@ services:
       - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - IG_USER_ID=${IG_USER_ID:-}
       - IG_ACCESS_TOKEN=${IG_ACCESS_TOKEN:-}
       - FB_APP_ID=${FB_APP_ID:-}
@@ -33,6 +34,7 @@ services:
     environment:
       - API_URL=${API_URL:-http://backend:8000}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - IG_USER_ID=${IG_USER_ID:-}
       - IG_ACCESS_TOKEN=${IG_ACCESS_TOKEN:-}
       - FB_APP_ID=${FB_APP_ID:-}

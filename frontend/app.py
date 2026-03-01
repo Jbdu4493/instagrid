@@ -114,6 +114,17 @@ if 'analysis_done' not in st.session_state:
     st.session_state.analysis_done = False
 if 'analysis_result' not in st.session_state:
     st.session_state.analysis_result = None
+if 'ai_providers' not in st.session_state:
+    st.session_state.ai_providers = []
+
+# Fetch AI providers dynamically
+if not st.session_state.ai_providers and st.session_state.app_password:
+    try:
+        ai_res = api.get(f"{API_URL}/ai-providers")
+        if ai_res.status_code == 200:
+            st.session_state.ai_providers = ai_res.json().get("providers", [])
+    except Exception as e:
+        pass
 
 # Constants
 CROP_OPTIONS = {"Original": "original", "Carré (1:1)": "1:1", "Portrait (4:5)": "4:5", "Paysage (16:9)": "16:9"}
@@ -337,7 +348,22 @@ with tab_create:
     all_uploaded = all(f is not None for f in uploaded_files)
 
     if all_uploaded and not st.session_state.analysis_done:
-        if st.button("✨ Analyser la Grille & Générer les Légendes", type="primary"):
+        st.markdown("---")
+        
+        # Sélecteur IA
+        selected_ai_id = "openai"
+        if st.session_state.ai_providers:
+            # Créer un dictionnaire pour l'affichage propre dans Streamlit
+            ai_options = {p['id']: p['name'] for p in st.session_state.ai_providers}
+            selected_ai_id = st.selectbox(
+                "🧠 Choisissez votre Moteur d'Intelligence Artificielle :", 
+                options=list(ai_options.keys()), 
+                format_func=lambda x: ai_options[x]
+            )
+        else:
+            st.warning("Aucun moteur IA n'a pu être contacté. Assurez-vous d'avoir configuré OPENAI_API_KEY ou GEMINI_API_KEY.")
+
+        if st.button("✨ Analyser la Grille & Générer les Légendes", type="primary", disabled=not st.session_state.ai_providers):
             st.session_state.posts = []
             for idx, file in enumerate(uploaded_files):
                  file.seek(0)
@@ -350,7 +376,7 @@ with tab_create:
                      'crop_pos': {"x": crop_x[idx], "y": crop_y[idx]}
                  })
 
-            with st.spinner("Analyse du flux visuel en cours..."):
+            with st.spinner(f"Analyse du flux visuel en cours avec {selected_ai_id}..."):
                 try:
                     files_for_api = [("files", post['file']) for post in st.session_state.posts]
                     for post in st.session_state.posts:
@@ -360,7 +386,8 @@ with tab_create:
                         "user_context": user_context,
                         "context_0": contexts[0],
                         "context_1": contexts[1],
-                        "context_2": contexts[2]
+                        "context_2": contexts[2],
+                        "ai_provider": selected_ai_id
                     }
                     
                     response = api.post(f"{API_URL}/analyze", files=files_for_api, data=data)
@@ -417,8 +444,22 @@ with tab_create:
                 post['caption'] = new_caption
                 
                 # Regenerate Caption Action
-                if st.button("🔄 Régénérer Légende", key=f"regen_{post['id']}"):
-                    with st.spinner("Régénération..."):
+                c_regen_1, c_regen_2 = st.columns([1, 1])
+                with c_regen_1:
+                    ai_options = {p['id']: p['name'] for p in st.session_state.ai_providers} if st.session_state.ai_providers else {"openai": "OpenAI"}
+                    regen_ai = st.selectbox(
+                        "Moteur IA", 
+                        options=list(ai_options.keys()), 
+                        format_func=lambda x: ai_options[x],
+                        key=f"regen_ai_{post['id']}"
+                    )
+                with c_regen_2:
+                    st.write("") # Espacement
+                    st.write("")
+                    regen_btn = st.button("🔄 Regénérer", key=f"regen_{post['id']}")
+
+                if regen_btn:
+                    with st.spinner(f"Régénération avec {regen_ai}..."):
                         try:
                             # Use analysis state threading details if available
                             th_fr = st.session_state.analysis_result.get('common_thread_fr', '')
@@ -429,7 +470,8 @@ with tab_create:
                                 "individual_context": contexts[post['id']],
                                 "captions_history": post['history'],
                                 "common_thread_fr": th_fr,
-                                "common_thread_en": th_en
+                                "common_thread_en": th_en,
+                                "ai_provider": regen_ai
                             }
                             reg_res = api.post(f"{API_URL}/regenerate_caption", json=payload)
                             if reg_res.status_code == 200:
