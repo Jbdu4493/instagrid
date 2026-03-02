@@ -40,7 +40,23 @@ instagram_grid_analysis:
       "suggested_order": [0, 1, 2],
       "captions": ["Légende 1...", "Légende 2...", "Légende 3..."],
       "individual_scores": [80, 85, 90],
-      "hashtags": [ ... ],
+      "hashtags": [
+        {{
+          "broad": ["#hashtag1", "#hashtag2"],
+          "niche": ["#hashtag3", "#hashtag4"],
+          "specific": ["#hashtag5", "#hashtag6"]
+        }},
+        {{
+          "broad": ["#hashtag1", "#hashtag2"],
+          "niche": ["#hashtag3", "#hashtag4"],
+          "specific": ["#hashtag5", "#hashtag6"]
+        }},
+        {{
+          "broad": ["#hashtag1", "#hashtag2"],
+          "niche": ["#hashtag3", "#hashtag4"],
+          "specific": ["#hashtag5", "#hashtag6"]
+        }}
+      ],
       "coherence_score": 90,
       "coherence_reasoning": "..."
     }}

@@ -1,7 +1,8 @@
 import time
 import requests
 from typing import List, Dict, Optional
-from config import logger
+import json
+from config import logger, redis_client
 
 class InstagramAPIError(Exception):
     """Exception métier pour les défaillances de communication avec l'API Graph Meta."""
@@ -124,13 +125,33 @@ class InstagramService:
             "access_token": token
         }
         
+        cache_key = f"ig_posts:{user_id}:{limit}"
+        
+        if redis_client:
+            try:
+                cached = redis_client.get(cache_key)
+                if cached:
+                    logger.info(f"Returning {limit} cached posts for user {user_id}")
+                    return json.loads(cached)
+            except Exception as e:
+                logger.warning(f"Failed to read from Redis cache: {e}")
+        
         try:
             resp = requests.get(url, params=params, timeout=15)
             if resp.status_code != 200:
                 logger.error(f"Erreur Graph API lors de fetch_recent_posts: {resp.text}")
                 raise InstagramAPIError(f"Code {resp.status_code}: {resp.text}")
                 
-            return resp.json().get("data", [])
+            data = resp.json().get("data", [])
+            
+            if redis_client and data:
+                try:
+                    redis_client.setex(cache_key, 900, json.dumps(data)) # Cache for 15 minutes
+                    logger.info(f"Cached {len(data)} posts for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to write to Redis cache: {e}")
+                    
+            return data
             
         except requests.RequestException as e:
             logger.error(f"Erreur réseau sur fetch_recent_posts: {e}", exc_info=True)

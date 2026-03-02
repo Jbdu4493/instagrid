@@ -10,3 +10,5 @@ pillow
 PyYAML
 boto3
 python-dotenv
+redis
+celery

@@ -1,4 +1,11 @@
 services:
+  redis:
+    image: redis:alpine
+    container_name: instagrid-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
   backend:
     build:
       context: ./backend
@@ -19,8 +26,26 @@ services:
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
       - AWS_S3_REGION=${AWS_S3_REGION:-}
       - APP_PASSWORD=${APP_PASSWORD:-}
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend/data:/app/data
+    depends_on:
+      - redis
+    restart: always
+
+  celery_worker:
+    build:
+      context: ./backend
+    container_name: instagrid-celery
+    command: celery -A worker.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./backend/data:/app/data
+    depends_on:
+      - redis
     restart: always
 
   frontend:

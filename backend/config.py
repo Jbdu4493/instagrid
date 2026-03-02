@@ -1,9 +1,10 @@
 import os
 import sys
 import logging
-from openai import OpenAI
+from openai import AsyncOpenAI
 from google import genai
 import boto3
+import redis
 from botocore.config import Config as BotoConfig
 from drafts import S3DraftStore, LocalDraftStore
 from dotenv import load_dotenv
@@ -16,6 +17,17 @@ logger = logging.getLogger(__name__)
 
 # Ensure we can import new back-end packages
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Initialize Redis Client
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+try:
+    redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+    # Test connection
+    redis_client.ping()
+    logger.info("Redis cache connected successfully")
+except Exception as e:
+    logger.warning(f"Failed to connect to Redis: {e}")
+    redis_client = None
 
 from services.storage import StorageService, S3Storage, TmpfilesStorage
 from services.instagram_service import InstagramService
@@ -31,8 +43,8 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "secret")
 FACEBOOK_API_URL = "https://graph.facebook.com/v19.0"
 instagram_service = InstagramService(FACEBOOK_API_URL)
 
-# Initialize OpenAI Client
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# Initialize Async OpenAI Client
+client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Initialize Gemini Client
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -52,12 +64,13 @@ S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "")
 
 # Initialize Storage Strategy for Instagram Proxy Upload
 if USE_S3:
+    region = os.environ.get("AWS_S3_REGION", "eu-west-3")
     s3_client = boto3.client(
         "s3",
         aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-        region_name=os.environ.get("AWS_S3_REGION", "eu-west-3"),
-        config=BotoConfig(signature_version="s3v4")
+        region_name=region,
+        config=BotoConfig(signature_version="s3v4", region_name=region)
     )
     S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "instagrid")
     logger.info(f"S3 configured for ephemeral StorageService: bucket={S3_BUCKET}")

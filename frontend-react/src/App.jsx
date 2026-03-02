@@ -67,6 +67,7 @@ function App() {
   // AI Providers (Strategy Pattern)
   const [availableAiProviders, setAvailableAiProviders] = useState([]);
   const [selectedAi, setSelectedAi] = useState('openai');
+  const [streamedOutput, setStreamedOutput] = useState("");
   const [isCheckingAi, setIsCheckingAi] = useState(false);
 
   // Fetch Config
@@ -262,8 +263,8 @@ function App() {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
         canvas.toBlob((blob) => {
-          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-        }, 'image/jpeg', 0.92);
+          resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' }));
+        }, 'image/webp', 0.92);
       };
       img.src = URL.createObjectURL(file);
     });
@@ -273,10 +274,15 @@ function App() {
     if (files.some(f => !f)) return;
 
     setIsAnalyzing(true);
+    setStreamedOutput("");
+    setPosts([]); // Clear previous analysis immediately
     try {
       // Crop images client-side before sending to GPT
       const croppedFiles = await Promise.all(
         files.map((file, idx) => cropImageCanvas(file, cropRatios[idx], cropPositions[idx]))
+      );
+      const individualContexts = posts.map(
+        (_, i) => document.getElementById(`context_${i}`)?.value || ""
       );
 
       const formData = new FormData();
@@ -289,14 +295,42 @@ function App() {
         if (ctx) formData.append(`context_${idx}`, ctx);
       });
 
-      const response = await axios.post(`${API_URL}/analyze`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const fetchUrl = `${API_URL}/analyze`;
+      const response = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: {
+          'X-App-Password': localStorage.getItem('app_password')
+        },
+        body: formData
       });
 
-      const res = response.data;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let rawJsonData = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        rawJsonData += chunk;
+        setStreamedOutput(rawJsonData); // Update UI
+      }
+
+      const res = JSON.parse(rawJsonData);
       setAnalysisResult(res);
 
-      const newPosts = res.suggested_order.map((originalIndex, orderIndex) => ({
+      let orderArr = res.suggested_order || [0, 1, 2];
+      // Backend should handle 0-based conversion, but safety first
+      if (orderArr.some(x => x > 2)) {
+        orderArr = orderArr.map(x => x - 1);
+      }
+
+      const newPosts = orderArr.map((originalIndex, orderIndex) => ({
         id: `post-${originalIndex}`,
         originalIndex: originalIndex,
         file: files[originalIndex],
@@ -332,15 +366,41 @@ function App() {
       const payload = {
         image_base64: post.preview.split(',')[1],
         common_context: userContext,
-        individual_context: individualContexts[ctxIndex],
+        individual_context: individualContexts[ctxIndex] || "Aucun",
         captions_history: post.captions,
         common_thread_fr: analysisResult?.common_thread_fr || "",
         common_thread_en: analysisResult?.common_thread_en || "",
         ai_provider: aiProvider
       };
 
-      const response = await axios.post(`${API_URL}/regenerate_caption`, payload);
-      const newCaption = response.data.caption;
+      const response = await fetch(`${API_URL}/regenerate_caption`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-Password': localStorage.getItem('app_password')
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error("Erreur serveur lors de la régénération");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let rawJsonData = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        rawJsonData += decoder.decode(value, { stream: true });
+      }
+
+      // Backend fastAPI regenerates `RegenerateResponseParts` structured json chunks, but then router wraps 
+      // it into a string? Wait, backend router /regenerate_caption used to return `RegenerateResponse(caption=full)`.
+      // But now it returns `StreamingResponse` yielding chunks of `RegenerateResponseParts`.
+      // The frontend must parse that parts object.
+      // Wait, let's parse the parts JSON.
+      const parts = JSON.parse(rawJsonData);
+      const newCaption = `${parts.specific_fr || ''} ${payload.common_thread_fr || ''}\n\n${parts.specific_en || ''} ${payload.common_thread_en || ''}`;
 
       setPosts(prev => {
         const newPosts = [...prev];
@@ -765,6 +825,17 @@ function App() {
                   {isAnalyzing ? 'Analyse en cours...' : '✨ Analyser la grille'}
                 </button>
               </div>
+
+              {/* Streaming Output Display */}
+              {isAnalyzing && streamedOutput && (
+                <div className="mt-8 p-6 bg-gray-900 border border-purple-500/30 rounded-xl shadow-inner w-full text-left overflow-hidden">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
+                    <span className="text-xs text-green-500 uppercase tracking-wider font-bold">Flux de données en direct</span>
+                  </div>
+                  <p className="text-gray-300 font-mono text-sm whitespace-pre-wrap break-words">{streamedOutput}</p>
+                </div>
+              )}
             </section>
 
             {/* 2. Editor Section */}

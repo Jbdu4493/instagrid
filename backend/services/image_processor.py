@@ -34,8 +34,8 @@ def compress_image(image_bytes: bytes, max_size_kb: int = 800) -> bytes:
     try:
         img = Image.open(io.BytesIO(image_bytes))
         
-        # S'assurer d'un format compatible pour le JPEG
-        if img.mode != 'RGB':
+        # S'assurer d'un format compatible pour le WEBP
+        if img.mode not in ('RGB', 'RGBA'):
             img = img.convert('RGB')
             
         max_dimension = 1080
@@ -46,15 +46,15 @@ def compress_image(image_bytes: bytes, max_size_kb: int = 800) -> bytes:
             
         output = io.BytesIO()
         quality = 90
-        img.save(output, format='JPEG', quality=quality)
+        img.save(output, format='WEBP', quality=quality, method=4)
         
         # Réduire itérativement la qualité jusqu'à passer sous la barre des `max_size_kb`
         while output.tell() > max_size_kb * 1024 and quality > 10:
             output = io.BytesIO()
             quality -= 5
-            img.save(output, format='JPEG', quality=quality)
+            img.save(output, format='WEBP', quality=quality, method=4)
             
-        logger.info(f"Image compressée: {output.tell() / 1024:.2f} KB (Qualité finale: {quality})")
+        logger.info(f"Image compressée (WEBP): {output.tell() / 1024:.2f} KB (Qualité finale: {quality})")
         return output.getvalue()
         
     except OSError as e:
@@ -76,7 +76,7 @@ def crop_image(image_bytes: bytes, ratio: str, position: Optional[Dict[str, int]
     :param position: Dictionnaire optionnel indiquant le point d'ancrage en pourcentage {"x": int, "y": int}. 
                      (Défaut: {"x": 50, "y": 50} pour cibler le centre).
     :type position: Optional[Dict[str, int]]
-    :return: Les octets de l'image rognée en JPEG. 
+    :return: Les octets de l'image rognée en WEBP. 
              Si 'original' est passé, renvoie les octets source sans retouche.
     :rtype: bytes
     :raises ImageProcessingError: Si l'image source est corrompue et illisible par Pillow.
@@ -89,7 +89,7 @@ def crop_image(image_bytes: bytes, ratio: str, position: Optional[Dict[str, int]
 
     try:
         img = Image.open(io.BytesIO(image_bytes))
-        if img.mode != 'RGB':
+        if img.mode not in ('RGB', 'RGBA'):
             img = img.convert('RGB')
 
         target_ratio = CROP_RATIOS[ratio]
@@ -114,7 +114,7 @@ def crop_image(image_bytes: bytes, ratio: str, position: Optional[Dict[str, int]
             img = img.crop((0, top, img.width, top + new_height))
 
         output = io.BytesIO()
-        img.save(output, format='JPEG', quality=95)
+        img.save(output, format='WEBP', quality=95, method=4)
         logger.info(f"Image rognée au ratio '{ratio}', cible d'ancrage {position} -> Dimensions finales {img.width}x{img.height}")
         return output.getvalue()
 

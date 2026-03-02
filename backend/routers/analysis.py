@@ -1,27 +1,40 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from typing import List, Optional
 import base64
 import yaml
 from config import client, logger
 from models import AnalysisResponse, RegenerateRequest, RegenerateResponse, RegenerateResponseParts
-from services.image_processor import compress_image, ImageProcessingError
 from services.ai_service import get_ai_generator
+from worker import process_images_task
+import asyncio
 
 router = APIRouter()
 
 async def _process_uploaded_images(files: List[UploadFile]) -> List[str]:
-    """Compresses and encodes uploaded images to base64."""
-    processed_images = []
+    """Sends uploaded images to Celery for WebP compression and waits for result."""
+    raw_encoded_files = []
     for file in files:
         content = await file.read()
-        try:
-            image_bytes = compress_image(content, max_size_kb=800)
-            base64_img = base64.b64encode(image_bytes).decode('utf-8')
-            processed_images.append(base64_img)
-        except ImageProcessingError as e:
-            logger.error(f"Failed to process image {file.filename}: {e}")
-            raise HTTPException(status_code=400, detail=str(e))
-    return processed_images
+        raw_b64 = base64.b64encode(content).decode('utf-8')
+        raw_encoded_files.append(raw_b64)
+    
+    # Send task to Celery
+    task = process_images_task.delay(raw_encoded_files)
+    
+    # Active polling 
+    timeout_seconds = 30
+    for _ in range(timeout_seconds):
+        if task.ready():
+            result = task.result
+            if result.get("status") == "success":
+                return result.get("data")
+            else:
+                logger.error(f"Image processing failed in Celery: {result.get('detail')}")
+                raise HTTPException(status_code=400, detail="L'image est corrompue ou illisible.")
+        await asyncio.sleep(1)
+        
+    raise HTTPException(status_code=504, detail="La compression d'image a dépassé le temps alloué (Timeout).")
 
 def _load_analysis_prompt(user_context: str, context_0: str, context_1: str, context_2: str) -> str:
     """Loads and formats the system prompt from YAML."""
@@ -46,7 +59,7 @@ def _load_analysis_prompt(user_context: str, context_0: str, context_1: str, con
 
 
 
-@router.post("/analyze", response_model=AnalysisResponse)
+@router.post("/analyze")
 async def analyze_images(
     files: List[UploadFile] = File(...),
     ai_provider: Optional[str] = Form("openai"),
@@ -71,21 +84,19 @@ async def analyze_images(
     try:
         ai_generator = get_ai_generator(ai_provider)
         
-        # 4. Appel à l'IA et formatage de la réponse
-        result = ai_generator.analyze_grid(system_prompt, encoded_images)
-        
-        # Conformity check
-        if result.suggested_order and any(x > 2 for x in result.suggested_order):
-            logger.info(f"AI returned 1-based indices: {result.suggested_order}. Converting to 0-based.")
-            result.suggested_order = [x - 1 for x in result.suggested_order]
-            
-        return result
+        # 4. Return StreamingResponse
+        # Note: We can't do the conformity check (0-based indexing) midway through a stream.
+        # This logic must now be handled by the frontend.
+        return StreamingResponse(
+            ai_generator.analyze_grid_stream(system_prompt, encoded_images),
+            media_type="text/event-stream"
+        )
     except Exception as e:
         logger.error(f"AI Generator Error ({ai_provider}): {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"L'analyse IA a échoué: {str(e)}")
 
 
-@router.post("/regenerate_caption", response_model=RegenerateResponse)
+@router.post("/regenerate_caption")
 async def regenerate_caption(request: RegenerateRequest):
     logger.info("Regenerating caption...")
     
@@ -115,14 +126,10 @@ async def regenerate_caption(request: RegenerateRequest):
         ai_provider = getattr(request, 'ai_provider', 'openai')
         ai_generator = get_ai_generator(ai_provider)
         
-        parts = ai_generator.regenerate_caption(system_prompt, request.image_base64)
-        
-        full_caption = (
-            f"{parts.specific_fr} {request.common_thread_fr}\n\n"
-            f"{parts.specific_en} {request.common_thread_en}"
+        return StreamingResponse(
+            ai_generator.regenerate_caption_stream(system_prompt, request.image_base64),
+            media_type="text/event-stream"
         )
-        
-        return RegenerateResponse(caption=full_caption)
 
     except Exception as e:
         logger.error(f"Regeneration failed ({getattr(request, 'ai_provider', 'openai')}): {e}", exc_info=True)
